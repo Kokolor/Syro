@@ -5,7 +5,7 @@
 
 int main()
 {
-    char source[] = "4 / 2";
+    char source[] = "2 * 3 + 4 * 5";
     Lexer lexer;
     init_lexer(&lexer, source);
 

@@ -80,24 +80,44 @@ Node *parse_primary(Lexer *lexer)
     }
 }
 
+int get_operator_precedence(NodeType type)
+{
+    switch (type)
+    {
+    case AST_PLUS:
+    case AST_MINUS:
+        return 1;
+    case AST_STAR:
+    case AST_SLASH:
+        return 2;
+    default:
+        return 0;
+    }
+}
+
+Node *parse_binary_expression_with_precedence(Lexer *lexer, int precedence)
+{
+    Node *left = parse_primary(lexer);
+
+    while (lexer->current_token.type != TOKEN_EOF)
+    {
+        int current_precedence = get_operator_precedence(token_to_ast(lexer, lexer->current_token.type));
+        if (current_precedence < precedence)
+            break;
+
+        NodeType node_type = token_to_ast(lexer, lexer->current_token.type);
+        scan_token(lexer);
+
+        Node *right = parse_binary_expression_with_precedence(lexer, current_precedence + 1);
+        left = make_node(node_type, left, right, 0);
+    }
+
+    return left;
+}
+
 Node *parse_binary_expression(Lexer *lexer)
 {
-    Node *node, *left, *right;
-    NodeType node_type;
-
-    left = parse_primary(lexer);
-
-    if (lexer->current_token.type == TOKEN_EOF)
-        return left;
-
-    node_type = token_to_ast(lexer, lexer->current_token.type);
-
-    scan_token(lexer);
-
-    right = parse_binary_expression(lexer);
-
-    node = make_node(node_type, left, right, 0);
-    return node;
+    return parse_binary_expression_with_precedence(lexer, 0);
 }
 
 int evaluate_ast(Lexer *lexer, Node *node)
@@ -123,5 +143,6 @@ int evaluate_ast(Lexer *lexer, Node *node)
         return node->number_value;
     default:
         fprintf(stderr, "[Line %d]: Unexpected AST operator '%.*s'.\n", lexer->line, lexer->current_token.length, lexer->current_token.lexeme);
+        exit(EXIT_FAILURE);
     }
 }
