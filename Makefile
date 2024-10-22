@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g
+CFLAGS = -g -Isrc/
 
 BUILD_DIR = build
 
@@ -15,7 +15,7 @@ $(OUT): $(OBJECTS) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(OBJECTS) -o $(OUT)
 
 $(BUILD_DIR)/%.o: %.c
-	@mkdir -p $(@D)  # Crée le répertoire de destination si nécessaire
+	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR):

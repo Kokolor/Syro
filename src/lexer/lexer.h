@@ -10,6 +10,7 @@ typedef struct
     char *start;
     char *current_position;
     int line;
+    Token current_token;
 } Lexer;
 
 void init_lexer(Lexer *lexer, char *source);
@@ -25,7 +26,5 @@ char advance(Lexer *lexer);
 char peek(Lexer *lexer);
 
 int is_at_end(Lexer *lexer);
-
-Token make_error_token(Lexer *lexer, char *message);
 
 #endif // LEXER_H

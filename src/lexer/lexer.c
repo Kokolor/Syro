@@ -1,6 +1,7 @@
 // lexer.c
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include "lexer.h"
@@ -10,6 +11,7 @@ void init_lexer(Lexer *lexer, char *source)
     lexer->start = source;
     lexer->current_position = source;
     lexer->line = 1;
+    scan_token(lexer);
 }
 
 Token scan_token(Lexer *lexer)
@@ -17,30 +19,45 @@ Token scan_token(Lexer *lexer)
     lexer->start = lexer->current_position;
 
     if (is_at_end(lexer))
-        return make_token(lexer, TOKEN_EOF);
+    {
+        lexer->current_token = make_token(lexer, TOKEN_EOF);
+        return lexer->current_token;
+    }
 
     char character = advance(lexer);
 
     switch (character)
     {
     case '-':
-        return make_token(lexer, TOKEN_MINUS);
+        lexer->current_token = make_token(lexer, TOKEN_MINUS);
+        break;
     case '+':
-        return make_token(lexer, TOKEN_PLUS);
+        lexer->current_token = make_token(lexer, TOKEN_PLUS);
+        break;
     case '*':
-        return make_token(lexer, TOKEN_STAR);
+        lexer->current_token = make_token(lexer, TOKEN_STAR);
+        break;
     case '=':
-        return make_token(lexer, TOKEN_EQUAL);
+        lexer->current_token = make_token(lexer, TOKEN_EQUAL);
+        break;
     case ',':
-        return make_token(lexer, TOKEN_COMMA);
+        lexer->current_token = make_token(lexer, TOKEN_COMMA);
+        break;
     case ':':
-        return make_token(lexer, TOKEN_COLON);
+        lexer->current_token = make_token(lexer, TOKEN_COLON);
+        break;
     case ';':
-        return make_token(lexer, TOKEN_SEMI);
+        lexer->current_token = make_token(lexer, TOKEN_SEMI);
+        break;
     case '(':
-        return make_token(lexer, TOKEN_LPAREN);
+        lexer->current_token = make_token(lexer, TOKEN_LPAREN);
+        break;
     case ')':
-        return make_token(lexer, TOKEN_RPAREN);
+        lexer->current_token = make_token(lexer, TOKEN_RPAREN);
+        break;
+    case '/':
+        lexer->current_token = make_token(lexer, TOKEN_SLASH);
+        break;
     case ' ':
     case '\r':
     case '\t':
@@ -51,30 +68,23 @@ Token scan_token(Lexer *lexer)
     default:
         if (isdigit(character))
         {
-            return number(lexer);
+            lexer->current_token = number(lexer);
         }
-
-        if (isalpha(character) || character == '_')
+        else if (isalpha(character) || character == '_')
         {
             while (isalnum(peek(lexer)) || peek(lexer) == '_')
                 advance(lexer);
 
-            return make_token(lexer, TOKEN_IDENTIFIER);
+            lexer->current_token = make_token(lexer, TOKEN_IDENTIFIER);
         }
-
-        return make_error_token(lexer, "Unexpected character.");
+        else
+        {
+            fprintf(stderr, "[Line %d]: Unexpected character.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
     }
-}
 
-Token make_error_token(Lexer *lexer, char *message)
-{
-    Token token;
-    token.type = TOKEN_UNKNOWN;
-    token.lexeme = strdup(message);
-    token.length = (int)strlen(message);
-    token.line = lexer->line;
-
-    return token;
+    return lexer->current_token;
 }
 
 Token make_token(Lexer *lexer, TokenType type)
