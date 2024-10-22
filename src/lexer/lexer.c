@@ -79,7 +79,7 @@ Token scan_token(Lexer *lexer)
         }
         else
         {
-            fprintf(stderr, "[Line %d]: Unexpected character.\n", lexer->line);
+            fprintf(stderr, "[lexer.c][scan_token][Line %d]: Unexpected character '%c'.\n", lexer->line, character);
             exit(EXIT_FAILURE);
         }
     }

@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <lexer/lexer.h>
 #include "ast.h"
 
 Node *make_node(int operation, Node *left, Node *right, int number_value)
@@ -12,7 +11,7 @@ Node *make_node(int operation, Node *left, Node *right, int number_value)
     node = (Node *)malloc(sizeof(Node));
     if (node == NULL)
     {
-        fprintf(stderr, "Memory allocation failed for new AST node.\n");
+        fprintf(stderr, "[ast.c][make_node]: Memory allocation failed for a new AST node.\n");
         exit(EXIT_FAILURE);
     }
 
@@ -47,7 +46,7 @@ int token_to_ast(Lexer *lexer, TokenType token)
     case TOKEN_SLASH:
         return AST_SLASH;
     default:
-        fprintf(stderr, "[Line %d]: Unknown token '%.*s'.\n", lexer->line, lexer->current_token.length, lexer->current_token.lexeme);
+        fprintf(stderr, "[ast.c][token_to_ast][Line %d]: Unknown token '%.*s'.\n", lexer->line, lexer->current_token.length, lexer->current_token.lexeme);
         exit(EXIT_FAILURE);
     }
 }
@@ -67,7 +66,7 @@ Node *parse_primary(Lexer *lexer)
         Node *node = parse_binary_expression(lexer);
         if (lexer->current_token.type != TOKEN_RPAREN)
         {
-            fprintf(stderr, "[Line %d]: Expected closing parenthesis.\n", lexer->line);
+            fprintf(stderr, "[ast.c][parse_primary][Line %d]: Expected closing parenthesis.\n", lexer->line);
             exit(EXIT_FAILURE);
         }
         scan_token(lexer);
@@ -75,7 +74,7 @@ Node *parse_primary(Lexer *lexer)
     }
     else
     {
-        fprintf(stderr, "[Line %d]: Unexpected token '%.*s'.\n", lexer->line, token.length, token.lexeme);
+        fprintf(stderr, "[ast.c][parse_primary][Line %d]: Unexpected token '%.*s'.\n", lexer->line, token.length, token.lexeme);
         exit(EXIT_FAILURE);
     }
 }
@@ -120,29 +119,13 @@ Node *parse_binary_expression(Lexer *lexer)
     return parse_binary_expression_with_precedence(lexer, 0);
 }
 
-int evaluate_ast(Lexer *lexer, Node *node)
+void free_ast(Node *node)
 {
-    int left_value, right_value;
+    if (node == NULL)
+        return;
 
-    if (node->left)
-        left_value = evaluate_ast(lexer, node->left);
-    if (node->right)
-        right_value = evaluate_ast(lexer, node->right);
+    free_ast(node->left);
+    free_ast(node->right);
 
-    switch (node->operation)
-    {
-    case AST_PLUS:
-        return left_value + right_value;
-    case AST_MINUS:
-        return left_value - right_value;
-    case AST_STAR:
-        return left_value * right_value;
-    case AST_SLASH:
-        return left_value / right_value;
-    case AST_NUMBER:
-        return node->number_value;
-    default:
-        fprintf(stderr, "[Line %d]: Unexpected AST operator '%.*s'.\n", lexer->line, lexer->current_token.length, lexer->current_token.lexeme);
-        exit(EXIT_FAILURE);
-    }
+    free(node);
 }

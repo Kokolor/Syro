@@ -3,7 +3,7 @@
 #ifndef AST_H
 #define AST_H
 
-#endif // AST_H
+#include <lexer/lexer.h>
 
 typedef enum
 {
@@ -35,3 +35,7 @@ int token_to_ast(Lexer *lexer, TokenType token);
 Node *parse_binary_expression(Lexer *lexer);
 
 int evaluate_ast(Lexer *lexer, Node *node);
+
+void free_ast(Node *node);
+
+#endif // AST_H
