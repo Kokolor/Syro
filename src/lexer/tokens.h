@@ -17,6 +17,7 @@ typedef enum
     TOKEN_NUMBER,
     TOKEN_LPAREN,
     TOKEN_RPAREN,
+    TOKEN_PRINT,
     TOKEN_EOF,
     TOKEN_UNKNOWN,
 } TokenType;

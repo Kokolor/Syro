@@ -4,51 +4,48 @@
 #include <stdlib.h>
 #include "ast.h"
 
-Node *make_node(int operation, Node *left, Node *right, int number_value)
+Node *make_node(NodeType type, Node *left, Node *right, int number_value)
 {
-    Node *node;
-
-    node = (Node *)malloc(sizeof(Node));
+    Node *node = (Node *)malloc(sizeof(Node));
     if (node == NULL)
     {
         fprintf(stderr, "[ast.c][make_node]: Memory allocation failed for a new AST node.\n");
         exit(EXIT_FAILURE);
     }
 
-    node->operation = operation;
+    node->type = type;
     node->left = left;
     node->right = right;
     node->number_value = number_value;
+    node->expression = NULL;
 
     return node;
 }
 
-Node *make_leaf(int operation, int number_value)
+Node *make_leaf(NodeType type, int number_value)
 {
-    return make_node(operation, NULL, NULL, number_value);
+    return make_node(type, NULL, NULL, number_value);
 }
 
-Node *make_unary(int operation, Node *left, int number_value)
+Node *make_print(Node *expression)
 {
-    return make_node(operation, left, NULL, number_value);
+    Node *node = make_node(AST_PRINT, NULL, NULL, 0);
+    node->expression = expression;
+    return node;
 }
 
-int token_to_ast(Lexer *lexer, TokenType token)
+Node *make_statement_list(Node *list, Node *statement)
 {
-    switch (token)
-    {
-    case TOKEN_PLUS:
-        return AST_PLUS;
-    case TOKEN_MINUS:
-        return AST_MINUS;
-    case TOKEN_STAR:
-        return AST_STAR;
-    case TOKEN_SLASH:
-        return AST_SLASH;
-    default:
-        fprintf(stderr, "[ast.c][token_to_ast][Line %d]: Unknown token '%.*s'.\n", lexer->line, lexer->current_token.length, lexer->current_token.lexeme);
-        exit(EXIT_FAILURE);
-    }
+    if (list == NULL)
+        return make_node(AST_STATEMENT_LIST, statement, NULL, 0);
+
+    Node *current = list;
+    while (current->right != NULL && current->type == AST_STATEMENT_LIST)
+        current = current->right;
+
+    Node *new_list = make_node(AST_STATEMENT_LIST, statement, NULL, 0);
+    current->right = new_list;
+    return list;
 }
 
 Node *parse_primary(Lexer *lexer)
@@ -74,7 +71,89 @@ Node *parse_primary(Lexer *lexer)
     }
     else
     {
-        fprintf(stderr, "[ast.c][parse_primary][Line %d]: Unexpected token '%.*s'.\n", lexer->line, token.length, token.lexeme);
+        fprintf(stderr, "[ast.c][parse_primary][Line %d]: Unexpected token '%.*s'.\n",
+                lexer->line, token.length, token.lexeme);
+        exit(EXIT_FAILURE);
+    }
+}
+
+Node *parse_binary_expression_with_precedence(Lexer *lexer, int precedence)
+{
+    Node *left = parse_primary(lexer);
+
+    while (is_operator(lexer->current_token.type))
+    {
+        NodeType op_type = token_to_ast(lexer, lexer->current_token.type);
+        int current_precedence = get_operator_precedence(op_type);
+        if (current_precedence < precedence)
+            break;
+
+        scan_token(lexer);
+
+        Node *right = parse_binary_expression_with_precedence(lexer, current_precedence + 1);
+        left = make_node(op_type, left, right, 0);
+    }
+
+    return left;
+}
+
+Node *parse_binary_expression(Lexer *lexer)
+{
+    return parse_binary_expression_with_precedence(lexer, 0);
+}
+
+Node *parse_statement(Lexer *lexer)
+{
+    if (lexer->current_token.type == TOKEN_PRINT)
+    {
+        scan_token(lexer);
+
+        Node *expr = parse_binary_expression(lexer);
+
+        if (lexer->current_token.type != TOKEN_SEMI)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected ';' after print statement.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+        scan_token(lexer);
+
+        return make_print(expr);
+    }
+    else
+    {
+        fprintf(stderr, "[ast.c][parse_statement][Line %d]: Unknown statement.\n", lexer->line);
+        exit(EXIT_FAILURE);
+    }
+}
+
+Node *parse_statement_list(Lexer *lexer)
+{
+    Node *list = NULL;
+
+    while (lexer->current_token.type != TOKEN_EOF)
+    {
+        Node *stmt = parse_statement(lexer);
+        list = make_statement_list(list, stmt);
+    }
+
+    return list;
+}
+
+int token_to_ast(Lexer *lexer, TokenType token)
+{
+    switch (token)
+    {
+    case TOKEN_PLUS:
+        return AST_PLUS;
+    case TOKEN_MINUS:
+        return AST_MINUS;
+    case TOKEN_STAR:
+        return AST_STAR;
+    case TOKEN_SLASH:
+        return AST_SLASH;
+    default:
+        fprintf(stderr, "[ast.c][token_to_ast][Line %d]: Unknown token '%.*s'.\n",
+                lexer->line, lexer->current_token.length, lexer->current_token.lexeme);
         exit(EXIT_FAILURE);
     }
 }
@@ -94,29 +173,10 @@ int get_operator_precedence(NodeType type)
     }
 }
 
-Node *parse_binary_expression_with_precedence(Lexer *lexer, int precedence)
+int is_operator(TokenType token)
 {
-    Node *left = parse_primary(lexer);
-
-    while (lexer->current_token.type != TOKEN_EOF)
-    {
-        int current_precedence = get_operator_precedence(token_to_ast(lexer, lexer->current_token.type));
-        if (current_precedence < precedence)
-            break;
-
-        NodeType node_type = token_to_ast(lexer, lexer->current_token.type);
-        scan_token(lexer);
-
-        Node *right = parse_binary_expression_with_precedence(lexer, current_precedence + 1);
-        left = make_node(node_type, left, right, 0);
-    }
-
-    return left;
-}
-
-Node *parse_binary_expression(Lexer *lexer)
-{
-    return parse_binary_expression_with_precedence(lexer, 0);
+    return token == TOKEN_PLUS || token == TOKEN_MINUS ||
+           token == TOKEN_STAR || token == TOKEN_SLASH;
 }
 
 void free_ast(Node *node)
@@ -124,8 +184,13 @@ void free_ast(Node *node)
     if (node == NULL)
         return;
 
-    free_ast(node->left);
-    free_ast(node->right);
+    if (node->type == AST_PRINT)
+        free_ast(node->expression);
+    else
+    {
+        free_ast(node->left);
+        free_ast(node->right);
+    }
 
     free(node);
 }

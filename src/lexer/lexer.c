@@ -14,6 +14,13 @@ void init_lexer(Lexer *lexer, char *source)
     scan_token(lexer);
 }
 
+TokenType check_keyword(char *start, int length)
+{
+    if (length == 5 && strncmp(start, "print", 5) == 0)
+        return TOKEN_PRINT;
+    return TOKEN_IDENTIFIER;
+}
+
 Token scan_token(Lexer *lexer)
 {
     lexer->start = lexer->current_position;
@@ -75,7 +82,8 @@ Token scan_token(Lexer *lexer)
             while (isalnum(peek(lexer)) || peek(lexer) == '_')
                 advance(lexer);
 
-            lexer->current_token = make_token(lexer, TOKEN_IDENTIFIER);
+            int length = lexer->current_token.length = (int)(lexer->current_position - lexer->start);
+            lexer->current_token = make_token(lexer, check_keyword(lexer->start, length));
         }
         else
         {
