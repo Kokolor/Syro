@@ -1,5 +1,3 @@
-// lexer.c
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +16,8 @@ TokenType check_keyword(char *start, int length)
 {
     if (length == 5 && strncmp(start, "print", 5) == 0)
         return TOKEN_PRINT;
+    if (length == 3 && strncmp(start, "i32", 3) == 0)
+        return TOKEN_I32;
     return TOKEN_IDENTIFIER;
 }
 
@@ -82,8 +82,9 @@ Token scan_token(Lexer *lexer)
             while (isalnum(peek(lexer)) || peek(lexer) == '_')
                 advance(lexer);
 
-            int length = lexer->current_token.length = (int)(lexer->current_position - lexer->start);
+            int length = (int)(lexer->current_position - lexer->start);
             lexer->current_token = make_token(lexer, check_keyword(lexer->start, length));
+            lexer->current_token.length = length;
         }
         else
         {

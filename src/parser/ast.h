@@ -1,9 +1,7 @@
-// ast.h
-
 #ifndef AST_H
 #define AST_H
 
-#include "lexer/lexer.h"
+#include <lexer/lexer.h>
 
 typedef enum
 {
@@ -13,7 +11,8 @@ typedef enum
     AST_SLASH,
     AST_NUMBER,
     AST_PRINT,
-    AST_EXPRESSION,
+    AST_VARIABLE_DECL,
+    AST_IDENTIFIER,
     AST_STATEMENT_LIST,
 } NodeType;
 
@@ -25,6 +24,8 @@ struct Node
     Node *left;
     Node *right;
     int number_value;
+    char *var_type;
+    char *var_name;
     Node *expression;
 };
 
@@ -33,6 +34,10 @@ Node *make_node(NodeType type, Node *left, Node *right, int number_value);
 Node *make_leaf(NodeType type, int number_value);
 
 Node *make_print(Node *expression);
+
+Node *make_variable_decl(char *var_type, char *var_name, Node *expression);
+
+Node *make_variable_ref(char *var_name);
 
 Node *make_statement_list(Node *list, Node *statement);
 
@@ -46,7 +51,7 @@ Node *parse_statement(Lexer *lexer);
 
 Node *parse_statement_list(Lexer *lexer);
 
-int token_to_ast(Lexer *lexer, TokenType token);
+NodeType token_to_ast(Lexer *lexer, TokenType token);
 
 int get_operator_precedence(NodeType type);
 

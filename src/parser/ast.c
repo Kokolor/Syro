@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "ast.h"
 
 Node *make_node(NodeType type, Node *left, Node *right, int number_value)
@@ -17,6 +18,8 @@ Node *make_node(NodeType type, Node *left, Node *right, int number_value)
     node->left = left;
     node->right = right;
     node->number_value = number_value;
+    node->var_type = NULL;
+    node->var_name = NULL;
     node->expression = NULL;
 
     return node;
@@ -31,6 +34,22 @@ Node *make_print(Node *expression)
 {
     Node *node = make_node(AST_PRINT, NULL, NULL, 0);
     node->expression = expression;
+    return node;
+}
+
+Node *make_variable_decl(char *var_type, char *var_name, Node *expression)
+{
+    Node *node = make_node(AST_VARIABLE_DECL, NULL, NULL, 0);
+    node->var_type = var_type;
+    node->var_name = var_name;
+    node->expression = expression;
+    return node;
+}
+
+Node *make_variable_ref(char *var_name)
+{
+    Node *node = make_node(AST_IDENTIFIER, NULL, NULL, 0);
+    node->var_name = var_name;
     return node;
 }
 
@@ -56,6 +75,17 @@ Node *parse_primary(Lexer *lexer)
     {
         scan_token(lexer);
         return make_leaf(AST_NUMBER, atoi(token.lexeme));
+    }
+    else if (token.type == TOKEN_IDENTIFIER)
+    {
+        char *var_name = strndup(token.lexeme, token.length);
+        if (!var_name)
+        {
+            fprintf(stderr, "[ast.c][parse_primary][Line %d]: Memory allocation failed for variable name.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+        scan_token(lexer);
+        return make_variable_ref(var_name);
     }
     else if (token.type == TOKEN_LPAREN)
     {
@@ -119,6 +149,52 @@ Node *parse_statement(Lexer *lexer)
 
         return make_print(expr);
     }
+    else if (lexer->current_token.type == TOKEN_I32)
+    {
+        char *var_type = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+        if (!var_type)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Memory allocation failed for variable type.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+
+        if (lexer->current_token.type != TOKEN_IDENTIFIER)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected variable name after type.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+
+        char *var_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+        if (!var_name)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Memory allocation failed for variable name.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+
+        if (lexer->current_token.type != TOKEN_EQUAL)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected '=' after variable name.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+
+        Node *expr = parse_binary_expression(lexer);
+
+        if (lexer->current_token.type != TOKEN_SEMI)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected ';' after variable declaration.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+
+        return make_variable_decl(var_type, var_name, expr);
+    }
     else
     {
         fprintf(stderr, "[ast.c][parse_statement][Line %d]: Unknown statement.\n", lexer->line);
@@ -139,7 +215,7 @@ Node *parse_statement_list(Lexer *lexer)
     return list;
 }
 
-int token_to_ast(Lexer *lexer, TokenType token)
+NodeType token_to_ast(Lexer *lexer, TokenType token)
 {
     switch (token)
     {
@@ -186,6 +262,14 @@ void free_ast(Node *node)
 
     if (node->type == AST_PRINT)
         free_ast(node->expression);
+    else if (node->type == AST_VARIABLE_DECL)
+    {
+        free(node->var_type);
+        free(node->var_name);
+        free_ast(node->expression);
+    }
+    else if (node->type == AST_IDENTIFIER)
+        free(node->var_name);
     else
     {
         free_ast(node->left);

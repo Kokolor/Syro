@@ -1,14 +1,13 @@
-// main.c
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "codegen/codegen.h"
 #include "lexer/lexer.h"
 #include "parser/ast.h"
+#include "symbol_table/symbol_table.h"
 
 int main()
 {
-    char source[] = "print 4 + 3; print 7 - 2;\n";
+    char source[] = "i32 a = 10;\nprint b + 15;\n";
     Lexer lexer;
     init_lexer(&lexer, source);
 
@@ -55,8 +54,8 @@ int main()
         1,
         1);
 
-    LLVMValueRef printf_func = LLVMAddFunction(module, "printf", printf_type);
-    if (!printf_func)
+    LLVMValueRef printf_func_llvm = LLVMAddFunction(module, "printf", printf_type);
+    if (!printf_func_llvm)
     {
         fprintf(stderr, "Error: Failed to declare printf function.\n");
         exit(EXIT_FAILURE);
@@ -69,7 +68,9 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    generate_code(ast, module, builder, printf_func, format_str);
+    SymbolTable *sym_table = create_symbol_table();
+
+    generate_code(ast, module, builder, printf_func_llvm, format_str, sym_table);
     LLVMBuildRet(builder, LLVMConstInt(LLVMInt32Type(), 0, 0));
 
     char *llvm_ir = LLVMPrintModuleToString(module);
@@ -78,12 +79,13 @@ int main()
         fprintf(stderr, "Error: Failed to print LLVM IR.\n");
         exit(EXIT_FAILURE);
     }
-    printf("%s\n", llvm_ir);
+    printf("=== Generated IR ===\n%s\n", llvm_ir);
     LLVMDisposeMessage(llvm_ir);
 
     LLVMDisposeBuilder(builder);
     LLVMDisposeModule(module);
     free_ast(ast);
+    free_symbol_table(sym_table);
 
     return 0;
 }
