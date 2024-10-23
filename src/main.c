@@ -7,7 +7,28 @@
 
 int main()
 {
-    char source[] = "i32 a = 10;\nprint b + 15;\n";
+    FILE *file = fopen("main.syro", "r");
+    if (!file)
+    {
+        fprintf(stderr, "Error: Could not open file main.syro.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    rewind(file);
+
+    char *source = (char *)malloc(file_size + 1);
+    if (!source)
+    {
+        fprintf(stderr, "Error: Failed to allocate memory for source code.\n");
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
+
+    fread(source, 1, file_size, file);
+    fclose(file);
+
     Lexer lexer;
     init_lexer(&lexer, source);
 
@@ -15,6 +36,7 @@ int main()
     if (!ast)
     {
         fprintf(stderr, "Error: Failed to parse AST.\n");
+        free(source);
         exit(EXIT_FAILURE);
     }
 
@@ -22,6 +44,7 @@ int main()
     if (!module)
     {
         fprintf(stderr, "Error: Failed to create LLVM module.\n");
+        free(source);
         exit(EXIT_FAILURE);
     }
 
@@ -29,6 +52,8 @@ int main()
     if (!builder)
     {
         fprintf(stderr, "Error: Failed to create LLVM builder.\n");
+        LLVMDisposeModule(module);
+        free(source);
         exit(EXIT_FAILURE);
     }
 
@@ -37,6 +62,9 @@ int main()
     if (!main_func)
     {
         fprintf(stderr, "Error: Failed to add main function to module.\n");
+        LLVMDisposeBuilder(builder);
+        LLVMDisposeModule(module);
+        free(source);
         exit(EXIT_FAILURE);
     }
 
@@ -44,6 +72,9 @@ int main()
     if (!entry)
     {
         fprintf(stderr, "Error: Failed to create entry basic block.\n");
+        LLVMDisposeBuilder(builder);
+        LLVMDisposeModule(module);
+        free(source);
         exit(EXIT_FAILURE);
     }
     LLVMPositionBuilderAtEnd(builder, entry);
@@ -58,6 +89,9 @@ int main()
     if (!printf_func_llvm)
     {
         fprintf(stderr, "Error: Failed to declare printf function.\n");
+        LLVMDisposeBuilder(builder);
+        LLVMDisposeModule(module);
+        free(source);
         exit(EXIT_FAILURE);
     }
 
@@ -65,6 +99,9 @@ int main()
     if (!format_str)
     {
         fprintf(stderr, "Error: Failed to create format string.\n");
+        LLVMDisposeBuilder(builder);
+        LLVMDisposeModule(module);
+        free(source);
         exit(EXIT_FAILURE);
     }
 
@@ -77,6 +114,9 @@ int main()
     if (!llvm_ir)
     {
         fprintf(stderr, "Error: Failed to print LLVM IR.\n");
+        LLVMDisposeBuilder(builder);
+        LLVMDisposeModule(module);
+        free(source);
         exit(EXIT_FAILURE);
     }
     printf("=== Generated IR ===\n%s\n", llvm_ir);
@@ -86,6 +126,7 @@ int main()
     LLVMDisposeModule(module);
     free_ast(ast);
     free_symbol_table(sym_table);
+    free(source);
 
     return 0;
 }

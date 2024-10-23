@@ -1,0 +1,6 @@
+i32 num = 14;
+print num;
+
+@main(i32 x) -> i32 {
+    print x
+}
