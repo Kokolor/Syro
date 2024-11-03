@@ -30,6 +30,10 @@ TokenType check_keyword(char *start, int length)
         return TOKEN_RETURN;
     if (length == 5 && strncmp(start, "print", 5) == 0)
         return TOKEN_PRINT;
+    if (length == 2 && strncmp(start, "if", 2) == 0)
+        return TOKEN_IF;
+    if (length == 4 && strncmp(start, "else", 4) == 0)
+        return TOKEN_ELSE;
 
     return TOKEN_IDENTIFIER;
 }
@@ -53,6 +57,13 @@ char advance(Lexer *lexer)
 char peek(Lexer *lexer)
 {
     return *lexer->current_position;
+}
+
+char peek_next(Lexer *lexer)
+{
+    if (is_at_end(lexer))
+        return '\0';
+    return lexer->current_position[1];
 }
 
 int is_at_end(Lexer *lexer)
@@ -138,7 +149,49 @@ Token scan_token(Lexer *lexer)
         lexer->current_token = make_token(lexer, TOKEN_SLASH);
         break;
     case '=':
-        lexer->current_token = make_token(lexer, TOKEN_EQUAL);
+        if (peek(lexer) == '=')
+        {
+            advance(lexer);
+            lexer->current_token = make_token(lexer, TOKEN_EQUAL_EQUAL);
+        }
+        else
+        {
+            lexer->current_token = make_token(lexer, TOKEN_EQUAL);
+        }
+        break;
+    case '!':
+        if (peek(lexer) == '=')
+        {
+            advance(lexer);
+            lexer->current_token = make_token(lexer, TOKEN_BANG_EQUAL);
+        }
+        else
+        {
+            fprintf(stderr, "Error: Unexpected character '%c' on line %d.\n", c, lexer->line);
+            exit(EXIT_FAILURE);
+        }
+        break;
+    case '<':
+        if (peek(lexer) == '=')
+        {
+            advance(lexer);
+            lexer->current_token = make_token(lexer, TOKEN_LESS_EQUAL);
+        }
+        else
+        {
+            lexer->current_token = make_token(lexer, TOKEN_LESS);
+        }
+        break;
+    case '>':
+        if (peek(lexer) == '=')
+        {
+            advance(lexer);
+            lexer->current_token = make_token(lexer, TOKEN_GREATER_EQUAL);
+        }
+        else
+        {
+            lexer->current_token = make_token(lexer, TOKEN_GREATER);
+        }
         break;
     case '(':
         lexer->current_token = make_token(lexer, TOKEN_LPAREN);

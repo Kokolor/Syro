@@ -54,7 +54,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         LLVMValueRef func = LLVMAddFunction(module, node->func_name, func_type);
 
         LLVMBasicBlockRef func_entry = LLVMAppendBasicBlock(func, "entry");
-
         LLVMBuilderRef func_builder = LLVMCreateBuilder();
         LLVMPositionBuilderAtEnd(func_builder, func_entry);
 
@@ -120,6 +119,54 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
             generate_code(current->left, module, printf_func, format_str, sym_table, builder);
             current = current->right;
         }
+        break;
+    }
+
+    case AST_IF_STATEMENT:
+    {
+        if (!builder)
+        {
+            fprintf(stderr, "Error: Builder is NULL in if statement.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMValueRef condition = generate_code(node->condition, module, printf_func, format_str, sym_table, builder);
+
+        LLVMValueRef zero = LLVMConstInt(LLVMTypeOf(condition), 0, 0);
+        LLVMValueRef cond = LLVMBuildICmp(builder, LLVMIntNE, condition, zero, "ifcond");
+
+        LLVMBasicBlockRef then_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "then");
+        LLVMBasicBlockRef else_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "else");
+        LLVMBasicBlockRef merge_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "ifcont");
+
+        if (node->else_branch)
+        {
+            LLVMBuildCondBr(builder, cond, then_block, else_block);
+        }
+        else
+        {
+            LLVMBuildCondBr(builder, cond, then_block, merge_block);
+        }
+
+        LLVMPositionBuilderAtEnd(builder, then_block);
+        generate_code(node->then_branch, module, printf_func, format_str, sym_table, builder);
+        if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder)) == NULL)
+            LLVMBuildBr(builder, merge_block);
+
+        if (node->else_branch)
+        {
+            LLVMPositionBuilderAtEnd(builder, else_block);
+            generate_code(node->else_branch, module, printf_func, format_str, sym_table, builder);
+            if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder)) == NULL)
+                LLVMBuildBr(builder, merge_block);
+        }
+        else
+        {
+            LLVMDeleteBasicBlock(else_block);
+        }
+
+        LLVMPositionBuilderAtEnd(builder, merge_block);
+
         break;
     }
 
@@ -227,8 +274,46 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
     }
 
     case AST_NUMBER:
-    {
         return LLVMConstInt(LLVMInt32Type(), node->number_value, 0);
+
+    case AST_EQUAL_EQUAL:
+    case AST_BANG_EQUAL:
+    case AST_LESS:
+    case AST_LESS_EQUAL:
+    case AST_GREATER:
+    case AST_GREATER_EQUAL:
+    {
+        LLVMValueRef left = generate_code(node->left, module, printf_func, format_str, sym_table, builder);
+        LLVMValueRef right = generate_code(node->right, module, printf_func, format_str, sym_table, builder);
+
+        LLVMValueRef cmp_result;
+
+        switch (node->type)
+        {
+        case AST_EQUAL_EQUAL:
+            cmp_result = LLVMBuildICmp(builder, LLVMIntEQ, left, right, "eqtmp");
+            break;
+        case AST_BANG_EQUAL:
+            cmp_result = LLVMBuildICmp(builder, LLVMIntNE, left, right, "netmp");
+            break;
+        case AST_LESS:
+            cmp_result = LLVMBuildICmp(builder, LLVMIntSLT, left, right, "slttmp");
+            break;
+        case AST_LESS_EQUAL:
+            cmp_result = LLVMBuildICmp(builder, LLVMIntSLE, left, right, "sletmp");
+            break;
+        case AST_GREATER:
+            cmp_result = LLVMBuildICmp(builder, LLVMIntSGT, left, right, "sgttmp");
+            break;
+        case AST_GREATER_EQUAL:
+            cmp_result = LLVMBuildICmp(builder, LLVMIntSGE, left, right, "sgetmp");
+            break;
+        default:
+            fprintf(stderr, "Error: Unknown comparison operator.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        return LLVMBuildZExt(builder, cmp_result, LLVMInt32Type(), "booltmp");
     }
 
     case AST_PLUS:

@@ -104,53 +104,14 @@ Node *make_cast(char *cast_type, Node *expression)
     return node;
 }
 
-int is_type_token(TokenType token)
+Node *make_if_statement(Node *condition, Node *then_branch, Node *else_branch)
 {
-    return token == TOKEN_I8 || token == TOKEN_I16 || token == TOKEN_I32 ||
-           token == TOKEN_I64 || token == TOKEN_VOID;
+    Node *node = make_node(AST_IF_STATEMENT, NULL, NULL, 0);
+    node->condition = condition;
+    node->then_branch = then_branch;
+    node->else_branch = else_branch;
+    return node;
 }
-
-int is_operator(TokenType token)
-{
-    return token == TOKEN_PLUS || token == TOKEN_MINUS ||
-           token == TOKEN_STAR || token == TOKEN_SLASH;
-}
-
-NodeType token_to_ast(Lexer *lexer, TokenType token)
-{
-    switch (token)
-    {
-    case TOKEN_PLUS:
-        return AST_PLUS;
-    case TOKEN_MINUS:
-        return AST_MINUS;
-    case TOKEN_STAR:
-        return AST_STAR;
-    case TOKEN_SLASH:
-        return AST_SLASH;
-    default:
-        fprintf(stderr, "Error: Unknown token '%.*s'.\n", lexer->current_token.length, lexer->current_token.lexeme);
-        exit(EXIT_FAILURE);
-    }
-}
-
-int get_operator_precedence(NodeType type)
-{
-    switch (type)
-    {
-    case AST_PLUS:
-    case AST_MINUS:
-        return 1;
-    case AST_STAR:
-    case AST_SLASH:
-        return 2;
-    default:
-        return 0;
-    }
-}
-
-Node *parse_primary(Lexer *lexer);
-Node *parse_binary_expression_with_precedence(Lexer *lexer, int precedence);
 
 Node *parse_primary(Lexer *lexer)
 {
@@ -275,8 +236,80 @@ Node *parse_binary_expression(Lexer *lexer)
     return parse_binary_expression_with_precedence(lexer, 0);
 }
 
+Node *parse_if_statement(Lexer *lexer)
+{
+    scan_token(lexer);
+
+    if (lexer->current_token.type != TOKEN_LPAREN)
+    {
+        fprintf(stderr, "Error: Expected '(' after 'if'.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    scan_token(lexer);
+
+    Node *condition = parse_binary_expression(lexer);
+
+    if (lexer->current_token.type != TOKEN_RPAREN)
+    {
+        fprintf(stderr, "Error: Expected ')' after condition.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    scan_token(lexer);
+
+    if (lexer->current_token.type != TOKEN_LBRACE)
+    {
+        fprintf(stderr, "Error: Expected '{' after 'if' condition.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    scan_token(lexer);
+
+    Node *then_branch = parse_statement_list(lexer);
+
+    if (lexer->current_token.type != TOKEN_RBRACE)
+    {
+        fprintf(stderr, "Error: Expected '}' after 'if' block.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    scan_token(lexer);
+
+    Node *else_branch = NULL;
+
+    if (lexer->current_token.type == TOKEN_ELSE)
+    {
+        scan_token(lexer);
+
+        if (lexer->current_token.type != TOKEN_LBRACE)
+        {
+            fprintf(stderr, "Error: Expected '{' after 'else'.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+
+        else_branch = parse_statement_list(lexer);
+
+        if (lexer->current_token.type != TOKEN_RBRACE)
+        {
+            fprintf(stderr, "Error: Expected '}' after 'else' block.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+    }
+
+    return make_if_statement(condition, then_branch, else_branch);
+}
+
 Node *parse_statement(Lexer *lexer)
 {
+    if (lexer->current_token.type == TOKEN_IF)
+    {
+        return parse_if_statement(lexer);
+    }
     if (lexer->current_token.type == TOKEN_AT)
     {
         scan_token(lexer);
@@ -473,6 +506,73 @@ Node *parse_statement_list(Lexer *lexer)
     return list;
 }
 
+int is_type_token(TokenType token)
+{
+    return token == TOKEN_I8 || token == TOKEN_I16 || token == TOKEN_I32 ||
+           token == TOKEN_I64 || token == TOKEN_VOID;
+}
+
+int is_operator(TokenType token)
+{
+    return token == TOKEN_PLUS || token == TOKEN_MINUS ||
+           token == TOKEN_STAR || token == TOKEN_SLASH ||
+           token == TOKEN_EQUAL_EQUAL || token == TOKEN_BANG_EQUAL ||
+           token == TOKEN_LESS || token == TOKEN_LESS_EQUAL ||
+           token == TOKEN_GREATER || token == TOKEN_GREATER_EQUAL;
+}
+
+NodeType token_to_ast(Lexer *lexer, TokenType token)
+{
+    switch (token)
+    {
+    case TOKEN_PLUS:
+        return AST_PLUS;
+    case TOKEN_MINUS:
+        return AST_MINUS;
+    case TOKEN_STAR:
+        return AST_STAR;
+    case TOKEN_SLASH:
+        return AST_SLASH;
+    case TOKEN_EQUAL_EQUAL:
+        return AST_EQUAL_EQUAL;
+    case TOKEN_BANG_EQUAL:
+        return AST_BANG_EQUAL;
+    case TOKEN_LESS:
+        return AST_LESS;
+    case TOKEN_LESS_EQUAL:
+        return AST_LESS_EQUAL;
+    case TOKEN_GREATER:
+        return AST_GREATER;
+    case TOKEN_GREATER_EQUAL:
+        return AST_GREATER_EQUAL;
+    default:
+        fprintf(stderr, "Error: Unknown token '%.*s'.\n", lexer->current_token.length, lexer->current_token.lexeme);
+        exit(EXIT_FAILURE);
+    }
+}
+
+int get_operator_precedence(NodeType type)
+{
+    switch (type)
+    {
+    case AST_PLUS:
+    case AST_MINUS:
+        return 1;
+    case AST_STAR:
+    case AST_SLASH:
+        return 2;
+    case AST_EQUAL_EQUAL:
+    case AST_BANG_EQUAL:
+    case AST_LESS:
+    case AST_LESS_EQUAL:
+    case AST_GREATER:
+    case AST_GREATER_EQUAL:
+        return 0;
+    default:
+        return -1;
+    }
+}
+
 void free_ast(Node *node)
 {
     if (node == NULL)
@@ -488,6 +588,11 @@ void free_ast(Node *node)
         free(node->var_type);
         free(node->var_name);
         free_ast(node->expression);
+        break;
+    case AST_IF_STATEMENT:
+        free_ast(node->condition);
+        free_ast(node->then_branch);
+        free_ast(node->else_branch);
         break;
     case AST_IDENTIFIER:
         free(node->var_name);
