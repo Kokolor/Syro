@@ -1,3 +1,5 @@
+// tokens.h
+
 #ifndef TOKENS_H
 #define TOKENS_H
 
@@ -13,10 +15,16 @@ typedef enum
     TOKEN_SEMI,
     TOKEN_IDENTIFIER,
     TOKEN_NUMBER,
+    TOKEN_RETURN,
+    TOKEN_ARROW,
+    TOKEN_AT,
+    TOKEN_LBRACE,
+    TOKEN_RBRACE,
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_PRINT,
     TOKEN_I32,
+    TOKEN_VOID,
     TOKEN_EOF,
     TOKEN_UNKNOWN,
 } TokenType;

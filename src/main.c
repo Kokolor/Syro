@@ -1,3 +1,5 @@
+// main.c
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "codegen/codegen.h"
@@ -27,6 +29,7 @@ int main()
     }
 
     fread(source, 1, file_size, file);
+    source[file_size] = '\0';
     fclose(file);
 
     Lexer lexer;
@@ -48,37 +51,6 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    LLVMBuilderRef builder = LLVMCreateBuilder();
-    if (!builder)
-    {
-        fprintf(stderr, "Error: Failed to create LLVM builder.\n");
-        LLVMDisposeModule(module);
-        free(source);
-        exit(EXIT_FAILURE);
-    }
-
-    LLVMTypeRef main_type = LLVMFunctionType(LLVMInt32Type(), NULL, 0, 0);
-    LLVMValueRef main_func = LLVMAddFunction(module, "main", main_type);
-    if (!main_func)
-    {
-        fprintf(stderr, "Error: Failed to add main function to module.\n");
-        LLVMDisposeBuilder(builder);
-        LLVMDisposeModule(module);
-        free(source);
-        exit(EXIT_FAILURE);
-    }
-
-    LLVMBasicBlockRef entry = LLVMAppendBasicBlock(main_func, "entry");
-    if (!entry)
-    {
-        fprintf(stderr, "Error: Failed to create entry basic block.\n");
-        LLVMDisposeBuilder(builder);
-        LLVMDisposeModule(module);
-        free(source);
-        exit(EXIT_FAILURE);
-    }
-    LLVMPositionBuilderAtEnd(builder, entry);
-
     LLVMTypeRef printf_type = LLVMFunctionType(
         LLVMInt32Type(),
         (LLVMTypeRef[]){LLVMPointerType(LLVMInt8Type(), 0)},
@@ -89,40 +61,44 @@ int main()
     if (!printf_func_llvm)
     {
         fprintf(stderr, "Error: Failed to declare printf function.\n");
-        LLVMDisposeBuilder(builder);
         LLVMDisposeModule(module);
         free(source);
         exit(EXIT_FAILURE);
     }
 
-    LLVMValueRef format_str = LLVMBuildGlobalStringPtr(builder, "%d\n", "fmt");
-    if (!format_str)
-    {
-        fprintf(stderr, "Error: Failed to create format string.\n");
-        LLVMDisposeBuilder(builder);
-        LLVMDisposeModule(module);
-        free(source);
-        exit(EXIT_FAILURE);
-    }
+    LLVMValueRef format_str = LLVMAddGlobal(module, LLVMArrayType(LLVMInt8Type(), 4), "fmt");
+    LLVMSetInitializer(format_str, LLVMConstString("%d\n", 4, 1));
+    LLVMSetGlobalConstant(format_str, 1);
+    LLVMSetLinkage(format_str, LLVMPrivateLinkage);
 
     SymbolTable *sym_table = create_symbol_table();
 
-    generate_code(ast, module, builder, printf_func_llvm, format_str, sym_table);
-    LLVMBuildRet(builder, LLVMConstInt(LLVMInt32Type(), 0, 0));
+    generate_code(ast, module, printf_func_llvm, format_str, sym_table, NULL);
+
+    LLVMValueRef main_func = LLVMGetNamedFunction(module, "main");
+    if (!main_func)
+    {
+        fprintf(stderr, "Error: No 'main' function defined in syro code.\n");
+        LLVMDisposeModule(module);
+        free_ast(ast);
+        free_symbol_table(sym_table);
+        free(source);
+        exit(EXIT_FAILURE);
+    }
 
     char *llvm_ir = LLVMPrintModuleToString(module);
     if (!llvm_ir)
     {
         fprintf(stderr, "Error: Failed to print LLVM IR.\n");
-        LLVMDisposeBuilder(builder);
         LLVMDisposeModule(module);
+        free_ast(ast);
+        free_symbol_table(sym_table);
         free(source);
         exit(EXIT_FAILURE);
     }
-    printf("=== Generated IR ===\n%s\n", llvm_ir);
+    printf("%s", llvm_ir);
     LLVMDisposeMessage(llvm_ir);
 
-    LLVMDisposeBuilder(builder);
     LLVMDisposeModule(module);
     free_ast(ast);
     free_symbol_table(sym_table);

@@ -1,3 +1,5 @@
+// lexer.c
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +20,10 @@ TokenType check_keyword(char *start, int length)
         return TOKEN_PRINT;
     if (length == 3 && strncmp(start, "i32", 3) == 0)
         return TOKEN_I32;
+    if (length == 4 && strncmp(start, "void", 4) == 0)
+        return TOKEN_VOID;
+    if (length == 6 && strncmp(start, "return", 6) == 0)
+        return TOKEN_RETURN;
     return TOKEN_IDENTIFIER;
 }
 
@@ -36,7 +42,21 @@ Token scan_token(Lexer *lexer)
     switch (character)
     {
     case '-':
-        lexer->current_token = make_token(lexer, TOKEN_MINUS);
+        if (peek(lexer) == '>')
+        {
+            advance(lexer);
+            lexer->current_token = make_token(lexer, TOKEN_ARROW);
+        }
+        else
+        {
+            lexer->current_token = make_token(lexer, TOKEN_MINUS);
+        }
+        break;
+    case '{':
+        lexer->current_token = make_token(lexer, TOKEN_LBRACE);
+        break;
+    case '}':
+        lexer->current_token = make_token(lexer, TOKEN_RBRACE);
         break;
     case '+':
         lexer->current_token = make_token(lexer, TOKEN_PLUS);
@@ -61,6 +81,9 @@ Token scan_token(Lexer *lexer)
         break;
     case ')':
         lexer->current_token = make_token(lexer, TOKEN_RPAREN);
+        break;
+    case '@':
+        lexer->current_token = make_token(lexer, TOKEN_AT);
         break;
     case '/':
         lexer->current_token = make_token(lexer, TOKEN_SLASH);

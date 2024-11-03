@@ -1,6 +1,11 @@
-i32 num = 14;
-print num;
+@add(i32: x, i32: y) -> i32 {
+    return x + y;
+}
 
-@main(i32 x) -> i32 {
-    print x
+@main() -> void {
+    i32: a = 10;
+    i32: b = 20;
+    i32: c = add(a, b);
+
+    print c;
 }

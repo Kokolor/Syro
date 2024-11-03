@@ -37,6 +37,24 @@ Node *make_print(Node *expression)
     return node;
 }
 
+Node *make_function_decl(char *func_name, Node **parameters, int param_count, char *return_type, Node *body)
+{
+    Node *node = make_node(AST_FUNCTION_DECL, NULL, NULL, 0);
+    node->func_name = func_name;
+    node->parameters = parameters;
+    node->param_count = param_count;
+    node->return_type = return_type;
+    node->body = body;
+    return node;
+}
+
+Node *make_return_stmt(Node *expression)
+{
+    Node *node = make_node(AST_RETURN_STMT, NULL, NULL, 0);
+    node->expression = expression;
+    return node;
+}
+
 Node *make_variable_decl(char *var_type, char *var_name, Node *expression)
 {
     Node *node = make_node(AST_VARIABLE_DECL, NULL, NULL, 0);
@@ -78,14 +96,48 @@ Node *parse_primary(Lexer *lexer)
     }
     else if (token.type == TOKEN_IDENTIFIER)
     {
-        char *var_name = strndup(token.lexeme, token.length);
-        if (!var_name)
-        {
-            fprintf(stderr, "[ast.c][parse_primary][Line %d]: Memory allocation failed for variable name.\n", lexer->line);
-            exit(EXIT_FAILURE);
-        }
+        char *identifier = strndup(token.lexeme, token.length);
         scan_token(lexer);
-        return make_variable_ref(var_name);
+
+        if (lexer->current_token.type == TOKEN_LPAREN)
+        {
+            scan_token(lexer);
+
+            Node **arguments = NULL;
+            int arg_count = 0;
+
+            if (lexer->current_token.type != TOKEN_RPAREN)
+            {
+                do
+                {
+                    Node *arg = parse_binary_expression(lexer);
+                    arguments = realloc(arguments, sizeof(Node *) * (arg_count + 1));
+                    arguments[arg_count++] = arg;
+
+                    if (lexer->current_token.type == TOKEN_COMMA)
+                    {
+                        scan_token(lexer);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                } while (lexer->current_token.type != TOKEN_RPAREN);
+
+                if (lexer->current_token.type != TOKEN_RPAREN)
+                {
+                    fprintf(stderr, "[ast.c][parse_primary][Line %d]: Expected ')' after function arguments.\n", lexer->line);
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            scan_token(lexer);
+            return make_function_call(identifier, arguments, arg_count);
+        }
+        else
+        {
+            return make_variable_ref(identifier);
+        }
     }
     else if (token.type == TOKEN_LPAREN)
     {
@@ -93,7 +145,7 @@ Node *parse_primary(Lexer *lexer)
         Node *node = parse_binary_expression(lexer);
         if (lexer->current_token.type != TOKEN_RPAREN)
         {
-            fprintf(stderr, "[ast.c][parse_primary][Line %d]: Expected closing parenthesis.\n", lexer->line);
+            fprintf(stderr, "[ast.c][parse_primary][Line %d]: Expected ')'.\n", lexer->line);
             exit(EXIT_FAILURE);
         }
         scan_token(lexer);
@@ -134,27 +186,116 @@ Node *parse_binary_expression(Lexer *lexer)
 
 Node *parse_statement(Lexer *lexer)
 {
-    if (lexer->current_token.type == TOKEN_PRINT)
+    if (lexer->current_token.type == TOKEN_AT)
     {
         scan_token(lexer);
 
-        Node *expr = parse_binary_expression(lexer);
-
-        if (lexer->current_token.type != TOKEN_SEMI)
+        if (lexer->current_token.type != TOKEN_IDENTIFIER)
         {
-            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected ';' after print statement.\n", lexer->line);
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected function name after '@'.\n", lexer->line);
             exit(EXIT_FAILURE);
         }
+
+        char *func_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
         scan_token(lexer);
 
-        return make_print(expr);
+        if (lexer->current_token.type != TOKEN_LPAREN)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected '(' after function name.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+
+        Node **parameters = NULL;
+        int param_count = 0;
+
+        while (lexer->current_token.type != TOKEN_RPAREN)
+        {
+            if (lexer->current_token.type != TOKEN_I32 && lexer->current_token.type != TOKEN_IDENTIFIER && lexer->current_token.type != TOKEN_VOID)
+            {
+                fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected type in parameter list.\n", lexer->line);
+                exit(EXIT_FAILURE);
+            }
+
+            char *param_type = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+            scan_token(lexer);
+
+            if (lexer->current_token.type != TOKEN_COLON)
+            {
+                fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected ':' after parameter type.\n", lexer->line);
+                exit(EXIT_FAILURE);
+            }
+
+            scan_token(lexer);
+
+            if (lexer->current_token.type != TOKEN_IDENTIFIER)
+            {
+                fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected parameter name after ':'.\n", lexer->line);
+                exit(EXIT_FAILURE);
+            }
+
+            char *param_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+            scan_token(lexer);
+
+            Node *param = make_variable_decl(param_type, param_name, NULL);
+            parameters = realloc(parameters, sizeof(Node *) * (param_count + 1));
+            parameters[param_count++] = param;
+
+            if (lexer->current_token.type == TOKEN_COMMA)
+            {
+                scan_token(lexer);
+            }
+            else if (lexer->current_token.type != TOKEN_RPAREN)
+            {
+                fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected ',' or ')' in parameter list.\n", lexer->line);
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        scan_token(lexer);
+
+        char *return_type = NULL;
+        if (lexer->current_token.type == TOKEN_ARROW)
+        {
+            scan_token(lexer);
+
+            if (lexer->current_token.type != TOKEN_I32 && lexer->current_token.type != TOKEN_IDENTIFIER && lexer->current_token.type != TOKEN_VOID)
+            {
+                fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected return type after '->'.\n", lexer->line);
+                exit(EXIT_FAILURE);
+            }
+
+            return_type = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+            scan_token(lexer);
+        }
+
+        if (lexer->current_token.type != TOKEN_LBRACE)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected '{' to start function body.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+        Node *body = parse_statement_list(lexer);
+
+        if (lexer->current_token.type != TOKEN_RBRACE)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected '}' to end function body.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+        return make_function_decl(func_name, parameters, param_count, return_type, body);
     }
-    else if (lexer->current_token.type == TOKEN_I32)
+    else if (lexer->current_token.type == TOKEN_I32 || lexer->current_token.type == TOKEN_IDENTIFIER || lexer->current_token.type == TOKEN_VOID)
     {
         char *var_type = strndup(lexer->current_token.lexeme, lexer->current_token.length);
-        if (!var_type)
+        scan_token(lexer);
+
+        if (lexer->current_token.type != TOKEN_COLON)
         {
-            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Memory allocation failed for variable type.\n", lexer->line);
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected ':' after variable type.\n", lexer->line);
             exit(EXIT_FAILURE);
         }
 
@@ -162,17 +303,11 @@ Node *parse_statement(Lexer *lexer)
 
         if (lexer->current_token.type != TOKEN_IDENTIFIER)
         {
-            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected variable name after type.\n", lexer->line);
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected variable name after ':'.\n", lexer->line);
             exit(EXIT_FAILURE);
         }
 
         char *var_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
-        if (!var_name)
-        {
-            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Memory allocation failed for variable name.\n", lexer->line);
-            exit(EXIT_FAILURE);
-        }
-
         scan_token(lexer);
 
         if (lexer->current_token.type != TOKEN_EQUAL)
@@ -182,7 +317,6 @@ Node *parse_statement(Lexer *lexer)
         }
 
         scan_token(lexer);
-
         Node *expr = parse_binary_expression(lexer);
 
         if (lexer->current_token.type != TOKEN_SEMI)
@@ -192,8 +326,35 @@ Node *parse_statement(Lexer *lexer)
         }
 
         scan_token(lexer);
-
         return make_variable_decl(var_type, var_name, expr);
+    }
+    else if (lexer->current_token.type == TOKEN_RETURN)
+    {
+        scan_token(lexer);
+        Node *expr = NULL;
+        if (lexer->current_token.type != TOKEN_SEMI)
+        {
+            expr = parse_binary_expression(lexer);
+        }
+        if (lexer->current_token.type != TOKEN_SEMI)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected ';' after return statement.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+        scan_token(lexer);
+        return make_return_stmt(expr);
+    }
+    else if (lexer->current_token.type == TOKEN_PRINT)
+    {
+        scan_token(lexer);
+        Node *expr = parse_binary_expression(lexer);
+        if (lexer->current_token.type != TOKEN_SEMI)
+        {
+            fprintf(stderr, "[ast.c][parse_statement][Line %d]: Expected ';' after print statement.\n", lexer->line);
+            exit(EXIT_FAILURE);
+        }
+        scan_token(lexer);
+        return make_print(expr);
     }
     else
     {
@@ -206,13 +367,23 @@ Node *parse_statement_list(Lexer *lexer)
 {
     Node *list = NULL;
 
-    while (lexer->current_token.type != TOKEN_EOF)
+    while (lexer->current_token.type != TOKEN_EOF &&
+           lexer->current_token.type != TOKEN_RBRACE)
     {
         Node *stmt = parse_statement(lexer);
         list = make_statement_list(list, stmt);
     }
 
     return list;
+}
+
+Node *make_function_call(char *func_name, Node **arguments, int arg_count)
+{
+    Node *node = make_node(AST_FUNCTION_CALL, NULL, NULL, 0);
+    node->func_name = func_name;
+    node->parameters = arguments;
+    node->param_count = arg_count;
+    return node;
 }
 
 NodeType token_to_ast(Lexer *lexer, TokenType token)
@@ -260,20 +431,46 @@ void free_ast(Node *node)
     if (node == NULL)
         return;
 
-    if (node->type == AST_PRINT)
-        free_ast(node->expression);
-    else if (node->type == AST_VARIABLE_DECL)
+    switch (node->type)
     {
+    case AST_PRINT:
+    case AST_RETURN_STMT:
+        free_ast(node->expression);
+        break;
+    case AST_VARIABLE_DECL:
         free(node->var_type);
         free(node->var_name);
         free_ast(node->expression);
-    }
-    else if (node->type == AST_IDENTIFIER)
+        break;
+    case AST_IDENTIFIER:
         free(node->var_name);
-    else
-    {
+        break;
+    case AST_FUNCTION_CALL:
+        free(node->func_name);
+        for (int i = 0; i < node->param_count; ++i)
+        {
+            free_ast(node->parameters[i]);
+        }
+        free(node->parameters);
+        break;
+    case AST_FUNCTION_DECL:
+        free(node->func_name);
+        for (int i = 0; i < node->param_count; ++i)
+        {
+            free_ast(node->parameters[i]);
+        }
+        free(node->parameters);
+        free(node->return_type);
+        free_ast(node->body);
+        break;
+    case AST_STATEMENT_LIST:
         free_ast(node->left);
         free_ast(node->right);
+        break;
+    default:
+        free_ast(node->left);
+        free_ast(node->right);
+        break;
     }
 
     free(node);

@@ -1,6 +1,6 @@
 CC = clang
 CFLAGS = -g -Isrc/ $(shell llvm-config-14 --cflags)
-LDFLAGS = $(shell llvm-config-14 --libs)
+LDFLAGS = $(shell llvm-config-14 --libs) $(shell llvm-config-14 --system-libs) -lm -ldl -pthread
 
 BUILD_DIR = build
 OUT = $(BUILD_DIR)/syroc
