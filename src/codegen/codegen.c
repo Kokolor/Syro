@@ -9,23 +9,28 @@
 
 LLVMTypeRef get_llvm_type(const char *type_name)
 {
-    if (strcmp(type_name, "i32") == 0)
+    if (strcmp(type_name, "i8") == 0)
+        return LLVMInt8Type();
+    else if (strcmp(type_name, "i16") == 0)
+        return LLVMInt16Type();
+    else if (strcmp(type_name, "i32") == 0)
         return LLVMInt32Type();
+    else if (strcmp(type_name, "i64") == 0)
+        return LLVMInt64Type();
     else if (strcmp(type_name, "void") == 0)
         return LLVMVoidType();
     else
     {
-        fprintf(stderr, "[codegen.c][get_llvm_type]: Unsupported type '%s'.\n", type_name);
+        fprintf(stderr, "Error: Unsupported type '%s'.\n", type_name);
         exit(EXIT_FAILURE);
     }
 }
 
-LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf_func,
-                           LLVMValueRef format_str, SymbolTable *sym_table, LLVMBuilderRef builder)
+LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf_func, LLVMValueRef format_str, SymbolTable *sym_table, LLVMBuilderRef builder)
 {
     if (!node)
     {
-        fprintf(stderr, "[codegen.c][generate_code]: Error: Null AST node.\n");
+        fprintf(stderr, "Error: Null AST node.\n");
         exit(EXIT_FAILURE);
     }
 
@@ -49,6 +54,7 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         LLVMValueRef func = LLVMAddFunction(module, node->func_name, func_type);
 
         LLVMBasicBlockRef func_entry = LLVMAppendBasicBlock(func, "entry");
+
         LLVMBuilderRef func_builder = LLVMCreateBuilder();
         LLVMPositionBuilderAtEnd(func_builder, func_entry);
 
@@ -89,7 +95,7 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
     {
         if (!builder)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Builder is NULL in return statement.\n");
+            fprintf(stderr, "Error: Builder is NULL in return statement.\n");
             exit(EXIT_FAILURE);
         }
 
@@ -121,24 +127,32 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
     {
         if (!builder)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Builder is NULL in print statement.\n");
+            fprintf(stderr, "Error: Builder is NULL in print statement.\n");
             exit(EXIT_FAILURE);
         }
 
         LLVMValueRef expr = generate_code(node->expression, module, printf_func, format_str, sym_table, builder);
         if (!expr)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Failed to generate expression for print.\n");
+            fprintf(stderr, "Error: Failed to generate expression for print.\n");
             exit(EXIT_FAILURE);
         }
 
         LLVMValueRef format_str_ptr = LLVMBuildBitCast(builder, format_str, LLVMPointerType(LLVMInt8Type(), 0), "fmt_ptr");
+
         LLVMValueRef args[] = {format_str_ptr, expr};
+
         LLVMTypeRef printf_func_type = LLVMGetElementType(LLVMTypeOf(printf_func));
-        LLVMValueRef printf_call = LLVMBuildCall2(builder, printf_func_type, printf_func, args, 2, "callprintf");
+        LLVMValueRef printf_call = LLVMBuildCall2(
+            builder,
+            printf_func_type,
+            printf_func,
+            args,
+            2,
+            "callprintf");
         if (!printf_call)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Failed to build call to printf.\n");
+            fprintf(stderr, "Error: Failed to build call to printf.\n");
             exit(EXIT_FAILURE);
         }
 
@@ -149,22 +163,23 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
     {
         if (!builder)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Builder is NULL in variable declaration.\n");
+            fprintf(stderr, "Error: Builder is NULL in variable declaration.\n");
             exit(EXIT_FAILURE);
         }
 
         LLVMTypeRef var_type = get_llvm_type(node->var_type);
         if (var_type == LLVMVoidType())
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Cannot declare variable of type 'void'.\n");
+            fprintf(stderr, "Error: Cannot declare variable of type 'void'.\n");
             exit(EXIT_FAILURE);
         }
 
         char *var_name = node->var_name;
+
         LLVMValueRef alloca = LLVMBuildAlloca(builder, var_type, var_name);
         if (!alloca)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Failed to allocate memory for variable '%s'.\n", var_name);
+            fprintf(stderr, "Error: Failed to allocate memory for variable '%s'.\n", var_name);
             exit(EXIT_FAILURE);
         }
 
@@ -173,11 +188,12 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         LLVMValueRef expr = generate_code(node->expression, module, printf_func, format_str, sym_table, builder);
         if (!expr)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Failed to generate expression for variable '%s'.\n", var_name);
+            fprintf(stderr, "Error: Failed to generate expression for variable '%s'.\n", var_name);
             exit(EXIT_FAILURE);
         }
 
         LLVMBuildStore(builder, expr, alloca);
+
         return alloca;
     }
 
@@ -185,7 +201,7 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
     {
         if (!builder)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Builder is NULL in identifier.\n");
+            fprintf(stderr, "Error: Builder is NULL in identifier.\n");
             exit(EXIT_FAILURE);
         }
 
@@ -193,16 +209,17 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         LLVMValueRef var = get_symbol(sym_table, var_name);
         if (!var)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Undefined variable '%s'.\n", var_name);
+            fprintf(stderr, "Error: Undefined variable '%s'.\n", var_name);
             exit(EXIT_FAILURE);
         }
 
         LLVMTypeRef var_ptr_type = LLVMTypeOf(var);
         LLVMTypeRef var_type = LLVMGetElementType(var_ptr_type);
+
         LLVMValueRef loaded = LLVMBuildLoad2(builder, var_type, var, var_name);
         if (!loaded)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Failed to load variable '%s'.\n", var_name);
+            fprintf(stderr, "Error: Failed to load variable '%s'.\n", var_name);
             exit(EXIT_FAILURE);
         }
 
@@ -210,7 +227,9 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
     }
 
     case AST_NUMBER:
+    {
         return LLVMConstInt(LLVMInt32Type(), node->number_value, 0);
+    }
 
     case AST_PLUS:
     case AST_MINUS:
@@ -219,7 +238,7 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
     {
         if (!builder)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Builder is NULL in binary operation.\n");
+            fprintf(stderr, "Error: Builder is NULL in binary operation.\n");
             exit(EXIT_FAILURE);
         }
 
@@ -227,22 +246,39 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         LLVMValueRef right = generate_code(node->right, module, printf_func, format_str, sym_table, builder);
         if (!left || !right)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Failed to generate operands for binary operation.\n");
+            fprintf(stderr, "Error: Failed to generate operands for binary operation.\n");
             exit(EXIT_FAILURE);
         }
 
-        switch (node->type)
+        LLVMTypeRef left_type = LLVMTypeOf(left);
+        LLVMTypeRef right_type = LLVMTypeOf(right);
+
+        if (LLVMGetTypeKind(left_type) != LLVMGetTypeKind(right_type))
         {
-        case AST_PLUS:
-            return LLVMBuildAdd(builder, left, right, "addtmp");
-        case AST_MINUS:
-            return LLVMBuildSub(builder, left, right, "subtmp");
-        case AST_STAR:
-            return LLVMBuildMul(builder, left, right, "multmp");
-        case AST_SLASH:
-            return LLVMBuildSDiv(builder, left, right, "divtmp");
-        default:
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Unsupported binary operation.\n");
+            fprintf(stderr, "Error: Type mismatch in binary operation.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        if (LLVMGetTypeKind(left_type) == LLVMIntegerTypeKind)
+        {
+            switch (node->type)
+            {
+            case AST_PLUS:
+                return LLVMBuildAdd(builder, left, right, "addtmp");
+            case AST_MINUS:
+                return LLVMBuildSub(builder, left, right, "subtmp");
+            case AST_STAR:
+                return LLVMBuildMul(builder, left, right, "multmp");
+            case AST_SLASH:
+                return LLVMBuildSDiv(builder, left, right, "divtmp");
+            default:
+                fprintf(stderr, "Error: Unsupported binary operation.\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+        else
+        {
+            fprintf(stderr, "Error: Unsupported types in binary operation.\n");
             exit(EXIT_FAILURE);
         }
     }
@@ -251,14 +287,14 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
     {
         if (!builder)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Builder is NULL in function call.\n");
+            fprintf(stderr, "Error: Builder is NULL in function call.\n");
             exit(EXIT_FAILURE);
         }
 
         LLVMValueRef function = LLVMGetNamedFunction(module, node->func_name);
         if (!function)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Function '%s' not found.\n", node->func_name);
+            fprintf(stderr, "Error: Function '%s' not found.\n", node->func_name);
             exit(EXIT_FAILURE);
         }
 
@@ -268,16 +304,17 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
             args[i] = generate_code(node->parameters[i], module, printf_func, format_str, sym_table, builder);
             if (!args[i])
             {
-                fprintf(stderr, "[codegen.c][generate_code]: Error: Failed to generate code for argument %d in function call '%s'.\n", i, node->func_name);
+                fprintf(stderr, "Error: Failed to generate code for argument %d in function call '%s'.\n", i, node->func_name);
                 exit(EXIT_FAILURE);
             }
         }
 
         LLVMTypeRef function_type = LLVMGetElementType(LLVMTypeOf(function));
+
         LLVMValueRef call = LLVMBuildCall2(builder, function_type, function, args, node->param_count, "");
         if (!call)
         {
-            fprintf(stderr, "[codegen.c][generate_code]: Error: Failed to build function call '%s'.\n", node->func_name);
+            fprintf(stderr, "Error: Failed to build function call '%s'.\n", node->func_name);
             exit(EXIT_FAILURE);
         }
 
@@ -285,8 +322,46 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         return call;
     }
 
+    case AST_CAST:
+    {
+        if (!builder)
+        {
+            fprintf(stderr, "Error: Builder is NULL in cast.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMValueRef expr = generate_code(node->expression, module, printf_func, format_str, sym_table, builder);
+        LLVMTypeRef target_type = get_llvm_type(node->cast_type);
+
+        LLVMTypeRef expr_type = LLVMTypeOf(expr);
+
+        if (LLVMGetTypeKind(expr_type) == LLVMIntegerTypeKind &&
+            LLVMGetTypeKind(target_type) == LLVMIntegerTypeKind)
+        {
+            unsigned src_bits = LLVMGetIntTypeWidth(expr_type);
+            unsigned dest_bits = LLVMGetIntTypeWidth(target_type);
+            if (src_bits < dest_bits)
+            {
+                return LLVMBuildSExt(builder, expr, target_type, "sexttmp");
+            }
+            else if (src_bits > dest_bits)
+            {
+                return LLVMBuildTrunc(builder, expr, target_type, "trunctmp");
+            }
+            else
+            {
+                return LLVMBuildBitCast(builder, expr, target_type, "bitcasttmp");
+            }
+        }
+        else
+        {
+            fprintf(stderr, "Error: Invalid cast from type to type.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+
     default:
-        fprintf(stderr, "[codegen.c][generate_code]: Error: Unknown AST node type during code generation.\n");
+        fprintf(stderr, "Error: Unknown AST node type during code generation.\n");
         exit(EXIT_FAILURE);
     }
 

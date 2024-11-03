@@ -1,11 +1,11 @@
-@add(i32: x, i32: y) -> i32 {
-    return x + y;
+@multiply(i32: x, i32: y) -> i32 {
+    return x * y;
 }
 
-@main() -> void {
+@main() -> i32 {
     i32: a = 10;
     i32: b = 20;
-    i32: c = add(a, b);
-
+    i64: c = |i64|(multiply(a, b));
     print c;
+    return 0;
 }
