@@ -9,7 +9,15 @@
 
 LLVMTypeRef get_llvm_type(const char *type_name)
 {
-    if (strcmp(type_name, "i8") == 0)
+    if (strstr(type_name, "*") != NULL)
+    {
+        char *base_type_name = strdup(type_name);
+        base_type_name[strlen(base_type_name) - 1] = '\0';
+        LLVMTypeRef base_type = get_llvm_type(base_type_name);
+        free(base_type_name);
+        return LLVMPointerType(base_type, 0);
+    }
+    else if (strcmp(type_name, "i8") == 0)
         return LLVMInt8Type();
     else if (strcmp(type_name, "i16") == 0)
         return LLVMInt16Type();
@@ -56,6 +64,52 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         LLVMBuildStore(builder, expr, var);
 
         return expr;
+    }
+    case AST_ADDRESS_OF:
+    {
+        if (!builder)
+        {
+            fprintf(stderr, "Error: Builder is NULL in address-of operation.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        if (node->expression->type != AST_IDENTIFIER)
+        {
+            fprintf(stderr, "Error: Can only take address of a variable.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        char *var_name = node->expression->var_name;
+        LLVMValueRef var = get_symbol(sym_table, var_name);
+        if (!var)
+        {
+            fprintf(stderr, "Error: Undefined variable '%s' in address-of operation.\n", var_name);
+            exit(EXIT_FAILURE);
+        }
+
+        return var;
+    }
+    case AST_DEREFERENCE:
+    {
+        if (!builder)
+        {
+            fprintf(stderr, "Error: Builder is NULL in dereference operation.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMValueRef expr = generate_code(node->expression, module, printf_func, format_str, sym_table, builder);
+        LLVMTypeRef expr_type = LLVMTypeOf(expr);
+
+        if (LLVMGetTypeKind(expr_type) != LLVMPointerTypeKind)
+        {
+            fprintf(stderr, "Error: Cannot dereference a non-pointer type.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMTypeRef pointed_type = LLVMGetElementType(expr_type);
+        LLVMValueRef loaded = LLVMBuildLoad2(builder, pointed_type, expr, "deref");
+
+        return loaded;
     }
     case AST_FUNCTION_DECL:
     {
@@ -202,7 +256,23 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
             exit(EXIT_FAILURE);
         }
 
-        LLVMValueRef format_str_ptr = LLVMBuildBitCast(builder, format_str, LLVMPointerType(LLVMInt8Type(), 0), "fmt_ptr");
+        LLVMTypeRef expr_type = LLVMTypeOf(expr);
+        LLVMValueRef format_str_ptr;
+
+        if (LLVMGetTypeKind(expr_type) == LLVMIntegerTypeKind)
+        {
+            format_str_ptr = LLVMBuildBitCast(builder, format_str, LLVMPointerType(LLVMInt8Type(), 0), "fmt_ptr");
+        }
+        else if (LLVMGetTypeKind(expr_type) == LLVMPointerTypeKind)
+        {
+            LLVMValueRef ptr_format_str = LLVMBuildGlobalStringPtr(builder, "%p\n", "ptrfmt");
+            format_str_ptr = LLVMBuildBitCast(builder, ptr_format_str, LLVMPointerType(LLVMInt8Type(), 0), "fmt_ptr");
+        }
+        else
+        {
+            fprintf(stderr, "Error: Unsupported type in print statement.\n");
+            exit(EXIT_FAILURE);
+        }
 
         LLVMValueRef args[] = {format_str_ptr, expr};
 
@@ -222,6 +292,26 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
         return printf_call;
     }
+    case AST_DEREFERENCE_ASSIGNMENT:
+    {
+        if (!builder)
+        {
+            fprintf(stderr, "Error: Builder is NULL in dereference assignment.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMValueRef ptr = generate_code(node->left, module, printf_func, format_str, sym_table, builder);
+        if (LLVMGetTypeKind(LLVMTypeOf(ptr)) != LLVMPointerTypeKind)
+        {
+            fprintf(stderr, "Error: Left side of dereference assignment is not a pointer.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMValueRef value = generate_code(node->right, module, printf_func, format_str, sym_table, builder);
+        LLVMBuildStore(builder, value, ptr);
+        return value;
+    }
+
     case AST_VARIABLE_DECL:
     {
         if (!builder)

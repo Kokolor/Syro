@@ -1,4 +1,4 @@
-// ast.h
+
 
 #ifndef AST_H
 #define AST_H
@@ -31,6 +31,10 @@ typedef enum
     AST_CAST,
     AST_IF_STATEMENT,
     AST_WHILE_STATEMENT,
+
+    AST_ADDRESS_OF,
+    AST_DEREFERENCE,
+    AST_DEREFERENCE_ASSIGNMENT,
 } NodeType;
 
 typedef struct Node Node;
@@ -58,6 +62,7 @@ struct Node
 Node *make_node(NodeType type, Node *left, Node *right, int number_value);
 Node *make_leaf(NodeType type, int number_value);
 Node *make_assignment(char *var_name, Node *expression);
+Node *make_dereference_assignment(Node *dereferenced_expr, Node *value_expr);
 Node *make_function_decl(char *func_name, Node **parameters, int param_count, char *return_type, Node *body);
 Node *make_variable_decl(char *var_type, char *var_name, Node *expression);
 Node *make_return_stmt(Node *expression);
@@ -68,12 +73,15 @@ Node *make_statement_list(Node *list, Node *statement);
 Node *make_cast(char *cast_type, Node *expression);
 Node *make_if_statement(Node *condition, Node *then_branch, Node *else_branch);
 Node *make_while_statement(Node *condition, Node *body);
+Node *make_address_of(Node *expression);
+Node *make_dereference(Node *expression);
 Node *parse_if_statement(Lexer *lexer);
 Node *parse_while_statement(Lexer *lexer);
 Node *parse_statement(Lexer *lexer);
 Node *parse_statement_list(Lexer *lexer);
 Node *parse_binary_expression(Lexer *lexer);
 Node *parse_primary(Lexer *lexer);
+Node *parse_unary_expression(Lexer *lexer);
 Node *parse_binary_expression_with_precedence(Lexer *lexer, int precedence);
 NodeType token_to_ast(Lexer *lexer, TokenType token);
 int is_type_token(TokenType token);
@@ -81,4 +89,4 @@ int get_operator_precedence(NodeType type);
 int is_operator(TokenType token);
 void free_ast(Node *node);
 
-#endif // AST_H
+#endif

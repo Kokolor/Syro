@@ -1,10 +1,11 @@
 @main() -> i32 {
-    i32: i = 0;
+    i32: x = 42;
+    i32*: ptr = &x;
+    print ptr;
+    print *ptr;
 
-    while(i < 14) {
-        i = i + 1;
-        print i;
-    }
-    
+    *ptr = 100;
+    print x;
+
     return 0;
 }

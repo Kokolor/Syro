@@ -34,7 +34,7 @@ TokenType check_keyword(char *start, int length)
         return TOKEN_IF;
     if (length == 4 && strncmp(start, "else", 4) == 0)
         return TOKEN_ELSE;
-    if (length == 5 && strncmp(start, "while", 2) == 0)
+    if (length == 5 && strncmp(start, "while", 5) == 0)
         return TOKEN_WHILE;
 
     return TOKEN_IDENTIFIER;
@@ -120,7 +120,7 @@ Token scan_token(Lexer *lexer)
 
     if (isalpha(c) || c == '_')
     {
-        while (isalnum(peek(lexer)) || peek(lexer) == '_')
+        while (isalnum(peek(lexer)) || peek(lexer) == '_' || peek(lexer) == '*')
             advance(lexer);
 
         int length = (int)(lexer->current_position - lexer->start);
@@ -149,6 +149,9 @@ Token scan_token(Lexer *lexer)
         break;
     case '/':
         lexer->current_token = make_token(lexer, TOKEN_SLASH);
+        break;
+    case '&':
+        lexer->current_token = make_token(lexer, TOKEN_AMPERSAND);
         break;
     case '=':
         if (peek(lexer) == '=')

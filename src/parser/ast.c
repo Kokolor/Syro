@@ -1,4 +1,4 @@
-// ast.c
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +26,9 @@ Node *make_node(NodeType type, Node *left, Node *right, int number_value)
     node->body = NULL;
     node->return_type = NULL;
     node->cast_type = NULL;
+    node->condition = NULL;
+    node->then_branch = NULL;
+    node->else_branch = NULL;
     return node;
 }
 
@@ -39,6 +42,12 @@ Node *make_assignment(char *var_name, Node *expression)
     Node *node = make_node(AST_ASSIGNMENT, NULL, NULL, 0);
     node->var_name = var_name;
     node->expression = expression;
+    return node;
+}
+
+Node *make_dereference_assignment(Node *dereferenced_expr, Node *value_expr)
+{
+    Node *node = make_node(AST_DEREFERENCE_ASSIGNMENT, dereferenced_expr, value_expr, 0);
     return node;
 }
 
@@ -126,6 +135,20 @@ Node *make_while_statement(Node *condition, Node *body)
     Node *node = make_node(AST_WHILE_STATEMENT, NULL, NULL, 0);
     node->condition = condition;
     node->body = body;
+    return node;
+}
+
+Node *make_address_of(Node *expression)
+{
+    Node *node = make_node(AST_ADDRESS_OF, NULL, NULL, 0);
+    node->expression = expression;
+    return node;
+}
+
+Node *make_dereference(Node *expression)
+{
+    Node *node = make_node(AST_DEREFERENCE, NULL, NULL, 0);
+    node->expression = expression;
     return node;
 }
 
@@ -227,9 +250,29 @@ Node *parse_primary(Lexer *lexer)
     }
 }
 
+Node *parse_unary_expression(Lexer *lexer)
+{
+    if (lexer->current_token.type == TOKEN_AMPERSAND)
+    {
+        scan_token(lexer);
+        Node *expr = parse_unary_expression(lexer);
+        return make_address_of(expr);
+    }
+    else if (lexer->current_token.type == TOKEN_STAR)
+    {
+        scan_token(lexer);
+        Node *expr = parse_unary_expression(lexer);
+        return make_dereference(expr);
+    }
+    else
+    {
+        return parse_primary(lexer);
+    }
+}
+
 Node *parse_binary_expression_with_precedence(Lexer *lexer, int precedence)
 {
-    Node *left = parse_primary(lexer);
+    Node *left = parse_unary_expression(lexer);
 
     while (is_operator(lexer->current_token.type))
     {
@@ -251,7 +294,6 @@ Node *parse_binary_expression(Lexer *lexer)
 {
     return parse_binary_expression_with_precedence(lexer, 0);
 }
-
 Node *parse_if_statement(Lexer *lexer)
 {
     scan_token(lexer);
@@ -371,6 +413,32 @@ Node *parse_statement(Lexer *lexer)
     {
         return parse_while_statement(lexer);
     }
+    else if (lexer->current_token.type == TOKEN_STAR)
+    {
+        scan_token(lexer);
+        Node *dereferenced_expr = parse_unary_expression(lexer);
+
+        if (lexer->current_token.type != TOKEN_EQUAL)
+        {
+            fprintf(stderr, "Error: Expected '=' after dereferenced expression.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+
+        Node *value_expr = parse_binary_expression(lexer);
+
+        if (lexer->current_token.type != TOKEN_SEMI)
+        {
+            fprintf(stderr, "Error: Expected ';' after dereference assignment.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+
+        return make_dereference_assignment(dereferenced_expr, value_expr);
+    }
+
     if (lexer->current_token.type == TOKEN_AT)
     {
         scan_token(lexer);
@@ -658,6 +726,10 @@ void free_ast(Node *node)
 
     switch (node->type)
     {
+    case AST_ADDRESS_OF:
+    case AST_DEREFERENCE:
+        free_ast(node->expression);
+        break;
     case AST_PRINT:
     case AST_RETURN_STMT:
         free_ast(node->expression);
