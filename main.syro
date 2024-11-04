@@ -1,13 +1,7 @@
 @main() -> i32 {
-    if (1 == 2) {
-        print 1;
-    } else {
-        if (1 != 1) {
-            print 2;
-        }
-        else {
-            print 3;
-        }
-    }
+    i32: test = 14;
+    test = 26;
+    print test;
+    
     return 0;
 }

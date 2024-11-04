@@ -36,6 +36,27 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
     switch (node->type)
     {
+    case AST_ASSIGNMENT:
+    {
+        if (!builder)
+        {
+            fprintf(stderr, "Error: Builder is NULL in assignment.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        char *var_name = node->var_name;
+        LLVMValueRef var = get_symbol(sym_table, var_name);
+        if (!var)
+        {
+            fprintf(stderr, "Error: Undefined variable '%s' in assignment.\n", var_name);
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMValueRef expr = generate_code(node->expression, module, printf_func, format_str, sym_table, builder);
+        LLVMBuildStore(builder, expr, var);
+
+        return expr;
+    }
     case AST_FUNCTION_DECL:
     {
         LLVMTypeRef return_type = LLVMVoidType();
@@ -89,7 +110,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
         return func;
     }
-
     case AST_RETURN_STMT:
     {
         if (!builder)
@@ -110,7 +130,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         }
         return expr;
     }
-
     case AST_STATEMENT_LIST:
     {
         Node *current = node;
@@ -121,7 +140,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         }
         break;
     }
-
     case AST_IF_STATEMENT:
     {
         if (!builder)
@@ -169,7 +187,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
         break;
     }
-
     case AST_PRINT:
     {
         if (!builder)
@@ -205,7 +222,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
         return printf_call;
     }
-
     case AST_VARIABLE_DECL:
     {
         if (!builder)
@@ -243,7 +259,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
         return alloca;
     }
-
     case AST_IDENTIFIER:
     {
         if (!builder)
@@ -272,10 +287,8 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
         return loaded;
     }
-
     case AST_NUMBER:
         return LLVMConstInt(LLVMInt32Type(), node->number_value, 0);
-
     case AST_EQUAL_EQUAL:
     case AST_BANG_EQUAL:
     case AST_LESS:
@@ -315,7 +328,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
         return LLVMBuildZExt(builder, cmp_result, LLVMInt32Type(), "booltmp");
     }
-
     case AST_PLUS:
     case AST_MINUS:
     case AST_STAR:
@@ -367,7 +379,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
             exit(EXIT_FAILURE);
         }
     }
-
     case AST_FUNCTION_CALL:
     {
         if (!builder)
@@ -406,7 +417,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         free(args);
         return call;
     }
-
     case AST_CAST:
     {
         if (!builder)
@@ -444,7 +454,6 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
             exit(EXIT_FAILURE);
         }
     }
-
     default:
         fprintf(stderr, "Error: Unknown AST node type during code generation.\n");
         exit(EXIT_FAILURE);

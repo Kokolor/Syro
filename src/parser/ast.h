@@ -19,6 +19,7 @@ typedef enum
     AST_GREATER,
     AST_GREATER_EQUAL,
 
+    AST_ASSIGNMENT,
     AST_NUMBER,
     AST_IDENTIFIER,
     AST_VARIABLE_DECL,
@@ -54,10 +55,11 @@ struct Node
 };
 
 Node *make_node(NodeType type, Node *left, Node *right, int number_value);
+Node *make_leaf(NodeType type, int number_value);
+Node *make_assignment(char *var_name, Node *expression);
 Node *make_function_decl(char *func_name, Node **parameters, int param_count, char *return_type, Node *body);
 Node *make_variable_decl(char *var_type, char *var_name, Node *expression);
 Node *make_return_stmt(Node *expression);
-Node *make_leaf(NodeType type, int number_value);
 Node *make_print(Node *expression);
 Node *make_variable_ref(char *var_name);
 Node *make_function_call(char *func_name, Node **arguments, int arg_count);

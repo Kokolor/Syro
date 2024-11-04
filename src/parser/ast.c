@@ -29,6 +29,19 @@ Node *make_node(NodeType type, Node *left, Node *right, int number_value)
     return node;
 }
 
+Node *make_leaf(NodeType type, int number_value)
+{
+    return make_node(type, NULL, NULL, number_value);
+}
+
+Node *make_assignment(char *var_name, Node *expression)
+{
+    Node *node = make_node(AST_ASSIGNMENT, NULL, NULL, 0);
+    node->var_name = var_name;
+    node->expression = expression;
+    return node;
+}
+
 Node *make_function_decl(char *func_name, Node **parameters, int param_count, char *return_type, Node *body)
 {
     Node *node = make_node(AST_FUNCTION_DECL, NULL, NULL, 0);
@@ -54,11 +67,6 @@ Node *make_return_stmt(Node *expression)
     Node *node = make_node(AST_RETURN_STMT, NULL, NULL, 0);
     node->expression = expression;
     return node;
-}
-
-Node *make_leaf(NodeType type, int number_value)
-{
-    return make_node(type, NULL, NULL, number_value);
 }
 
 Node *make_print(Node *expression)
@@ -420,43 +428,60 @@ Node *parse_statement(Lexer *lexer)
         char *var_type = strndup(lexer->current_token.lexeme, lexer->current_token.length);
         scan_token(lexer);
 
-        if (lexer->current_token.type != TOKEN_COLON)
+        if (lexer->current_token.type == TOKEN_COLON)
         {
-            fprintf(stderr, "Error: Expected ':' after variable type.\n");
-            exit(EXIT_FAILURE);
+            scan_token(lexer);
+
+            if (lexer->current_token.type != TOKEN_IDENTIFIER)
+            {
+                fprintf(stderr, "Error: Expected variable name after ':'.\n");
+                exit(EXIT_FAILURE);
+            }
+
+            char *var_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+            scan_token(lexer);
+
+            if (lexer->current_token.type != TOKEN_EQUAL)
+            {
+                fprintf(stderr, "Error: Expected '=' after variable name.\n");
+                exit(EXIT_FAILURE);
+            }
+
+            scan_token(lexer);
+            Node *expr = parse_binary_expression(lexer);
+
+            if (lexer->current_token.type != TOKEN_SEMI)
+            {
+                fprintf(stderr, "Error: Expected ';' after variable declaration.\n");
+                exit(EXIT_FAILURE);
+            }
+
+            scan_token(lexer);
+            return make_variable_decl(var_type, var_name, expr);
         }
-
-        scan_token(lexer);
-
-        if (lexer->current_token.type != TOKEN_IDENTIFIER)
+        else
         {
-            fprintf(stderr, "Error: Expected variable name after ':'.\n");
-            exit(EXIT_FAILURE);
+            char *var_name = var_type;
+            if (lexer->current_token.type != TOKEN_EQUAL)
+            {
+                fprintf(stderr, "Error: Expected '=' for assignment.\n");
+                exit(EXIT_FAILURE);
+            }
+
+            scan_token(lexer);
+            Node *expr = parse_binary_expression(lexer);
+
+            if (lexer->current_token.type != TOKEN_SEMI)
+            {
+                fprintf(stderr, "Error: Expected ';' after assignment.\n");
+                exit(EXIT_FAILURE);
+            }
+
+            scan_token(lexer);
+            return make_assignment(var_name, expr);
         }
-
-        char *var_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
-        scan_token(lexer);
-
-        if (lexer->current_token.type != TOKEN_EQUAL)
-        {
-            fprintf(stderr, "Error: Expected '=' after variable name.\n");
-            exit(EXIT_FAILURE);
-        }
-
-        scan_token(lexer);
-
-        Node *expr = parse_binary_expression(lexer);
-
-        if (lexer->current_token.type != TOKEN_SEMI)
-        {
-            fprintf(stderr, "Error: Expected ';' after variable declaration.\n");
-            exit(EXIT_FAILURE);
-        }
-
-        scan_token(lexer);
-
-        return make_variable_decl(var_type, var_name, expr);
     }
+
     else if (lexer->current_token.type == TOKEN_RETURN)
     {
         scan_token(lexer);
