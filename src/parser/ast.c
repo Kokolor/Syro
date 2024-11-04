@@ -121,6 +121,14 @@ Node *make_if_statement(Node *condition, Node *then_branch, Node *else_branch)
     return node;
 }
 
+Node *make_while_statement(Node *condition, Node *body)
+{
+    Node *node = make_node(AST_WHILE_STATEMENT, NULL, NULL, 0);
+    node->condition = condition;
+    node->body = body;
+    return node;
+}
+
 Node *parse_primary(Lexer *lexer)
 {
     Token token = lexer->current_token;
@@ -312,11 +320,56 @@ Node *parse_if_statement(Lexer *lexer)
     return make_if_statement(condition, then_branch, else_branch);
 }
 
+Node *parse_while_statement(Lexer *lexer)
+{
+    scan_token(lexer);
+
+    if (lexer->current_token.type != TOKEN_LPAREN)
+    {
+        fprintf(stderr, "Error: Expected '(' after 'while'.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    scan_token(lexer);
+    Node *condition = parse_binary_expression(lexer);
+
+    if (lexer->current_token.type != TOKEN_RPAREN)
+    {
+        fprintf(stderr, "Error: Expected ')' after while condition.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    scan_token(lexer);
+
+    if (lexer->current_token.type != TOKEN_LBRACE)
+    {
+        fprintf(stderr, "Error: Expected '{' after while condition.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    scan_token(lexer);
+    Node *body = parse_statement_list(lexer);
+
+    if (lexer->current_token.type != TOKEN_RBRACE)
+    {
+        fprintf(stderr, "Error: Expected '}' after while body.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    scan_token(lexer);
+
+    return make_while_statement(condition, body);
+}
+
 Node *parse_statement(Lexer *lexer)
 {
     if (lexer->current_token.type == TOKEN_IF)
     {
         return parse_if_statement(lexer);
+    }
+    else if (lexer->current_token.type == TOKEN_WHILE)
+    {
+        return parse_while_statement(lexer);
     }
     if (lexer->current_token.type == TOKEN_AT)
     {

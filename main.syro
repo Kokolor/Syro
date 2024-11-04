@@ -1,7 +1,10 @@
 @main() -> i32 {
-    i32: test = 14;
-    test = 26;
-    print test;
+    i32: i = 0;
+
+    while(i < 14) {
+        i = i + 1;
+        print i;
+    }
     
     return 0;
 }

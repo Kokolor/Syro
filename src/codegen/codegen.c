@@ -454,6 +454,36 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
             exit(EXIT_FAILURE);
         }
     }
+    case AST_WHILE_STATEMENT:
+    {
+        if (!builder)
+        {
+            fprintf(stderr, "Error: Builder is NULL in while statement.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMBasicBlockRef cond_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "whilecond");
+        LLVMBasicBlockRef body_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "whilebody");
+        LLVMBasicBlockRef end_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "whileend");
+
+        LLVMBuildBr(builder, cond_block);
+
+        LLVMPositionBuilderAtEnd(builder, cond_block);
+        LLVMValueRef condition = generate_code(node->condition, module, printf_func, format_str, sym_table, builder);
+        LLVMValueRef zero = LLVMConstInt(LLVMTypeOf(condition), 0, 0);
+        LLVMValueRef cond = LLVMBuildICmp(builder, LLVMIntNE, condition, zero, "whilecond");
+
+        LLVMBuildCondBr(builder, cond, body_block, end_block);
+
+        LLVMPositionBuilderAtEnd(builder, body_block);
+        generate_code(node->body, module, printf_func, format_str, sym_table, builder);
+        LLVMBuildBr(builder, cond_block);
+
+        LLVMPositionBuilderAtEnd(builder, end_block);
+
+        break;
+    }
+
     default:
         fprintf(stderr, "Error: Unknown AST node type during code generation.\n");
         exit(EXIT_FAILURE);

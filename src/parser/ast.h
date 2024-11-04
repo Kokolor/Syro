@@ -29,7 +29,8 @@ typedef enum
     AST_PRINT,
     AST_STATEMENT_LIST,
     AST_CAST,
-    AST_IF_STATEMENT
+    AST_IF_STATEMENT,
+    AST_WHILE_STATEMENT,
 } NodeType;
 
 typedef struct Node Node;
@@ -66,6 +67,9 @@ Node *make_function_call(char *func_name, Node **arguments, int arg_count);
 Node *make_statement_list(Node *list, Node *statement);
 Node *make_cast(char *cast_type, Node *expression);
 Node *make_if_statement(Node *condition, Node *then_branch, Node *else_branch);
+Node *make_while_statement(Node *condition, Node *body);
+Node *parse_if_statement(Lexer *lexer);
+Node *parse_while_statement(Lexer *lexer);
 Node *parse_statement(Lexer *lexer);
 Node *parse_statement_list(Lexer *lexer);
 Node *parse_binary_expression(Lexer *lexer);

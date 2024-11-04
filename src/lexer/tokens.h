@@ -39,6 +39,7 @@ typedef enum
     TOKEN_PRINT,
     TOKEN_IF,
     TOKEN_ELSE,
+    TOKEN_WHILE,
 
     TOKEN_EOF
 } TokenType;
