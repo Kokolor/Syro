@@ -1,11 +1,50 @@
+@add(i32: x, i32: y) -> i32 {
+    return x + y;
+}
+
+@factorial(i32: n) -> i32 {
+    if (n <= 1) {
+        return 1;
+    } else {
+        return n * factorial(n - 1);
+    }
+}
+
+@compute_factorial() -> i32 {
+    i32: num = 5;
+    i32: fact = factorial(num);
+    print fact; 
+    return fact;
+}
+
 @main() -> i32 {
-    i32: x = 42;
-    i32*: ptr = &x;
-    print ptr;
-    print *ptr;
+    i32: a = 10;
+    i32: b = 20;
+    i32: result = add(a, b);
+    print result; 
+
+    i32*: ptr = &result;
+    print ptr;    
+    print *ptr;   
 
     *ptr = 100;
-    print x;
+    print result; 
+
+    i32: casted_value = |i32| (*ptr + 50);
+    print casted_value; 
+    
+    if (casted_value > 120) {
+        print |i32| (casted_value);
+    } else {
+        print |i32| (result);
+    }
+    
+    while (result < casted_value) {
+        result = result + 10;
+        print result;
+    }
 
     return 0;
 }
+
+

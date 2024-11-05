@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <error.h>
 #include "lexer.h"
 
 void init_lexer(Lexer *lexer, char *source)
@@ -172,7 +173,7 @@ Token scan_token(Lexer *lexer)
         }
         else
         {
-            fprintf(stderr, "Error: Unexpected character '%c' on line %d.\n", c, lexer->line);
+            error_report(lexer->line, "Unexpected character '!'");
             exit(EXIT_FAILURE);
         }
         break;
@@ -226,7 +227,7 @@ Token scan_token(Lexer *lexer)
         lexer->current_token = make_token(lexer, TOKEN_PIPE);
         break;
     default:
-        fprintf(stderr, "Error: Unexpected character '%c' on line %d.\n", c, lexer->line);
+        error_report(lexer->line, "Unexpected character '!'");
         exit(EXIT_FAILURE);
     }
 
