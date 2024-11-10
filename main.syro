@@ -1,50 +1,30 @@
-@add(i32: x, i32: y) -> i32 {
-    return x + y;
+@swap(i32*: x, i32*: y) -> void {
+    i32: temp = *x;
+    *x = *y;
+    *y = temp;
 }
 
-@factorial(i32: n) -> i32 {
-    if (n <= 1) {
-        return 1;
-    } else {
-        return n * factorial(n - 1);
-    }
-}
-
-@compute_factorial() -> i32 {
-    i32: num = 5;
-    i32: fact = factorial(num);
-    print fact; 
-    return fact;
+@increment(i32*: value) -> void {
+    *value = *value + 1;
 }
 
 @main() -> i32 {
     i32: a = 10;
     i32: b = 20;
-    i32: result = add(a, b);
-    print result; 
 
-    i32*: ptr = &result;
-    print ptr;    
-    print *ptr;   
+    print a;
+    print b;
 
-    *ptr = 100;
-    print result; 
+    swap(&a, &b);
 
-    i32: casted_value = |i32| (*ptr + 50);
-    print casted_value; 
-    
-    if (casted_value > 120) {
-        print |i32| (casted_value);
-    } else {
-        print |i32| (result);
-    }
-    
-    while (result < casted_value) {
-        result = result + 10;
-        print result;
-    }
+    print a;
+    print b;
+
+    increment(&a);
+    increment(&b);
+
+    print a;
+    print b;
 
     return 0;
 }
-
-

@@ -1,9 +1,9 @@
-
+// ast.c
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <error.h>
+#include "error.h"
 #include "ast.h"
 
 Node *make_node(NodeType type, Node *left, Node *right, int number_value)
@@ -224,14 +224,7 @@ Node *parse_primary(Lexer *lexer)
     {
         scan_token(lexer);
 
-        if (lexer->current_token.type != TOKEN_IDENTIFIER && !is_type_token(lexer->current_token.type))
-        {
-            error_report(lexer->line, "Error: Expected type after '|'.\n");
-            exit(EXIT_FAILURE);
-        }
-
-        char *cast_type = strndup(lexer->current_token.lexeme, lexer->current_token.length);
-        scan_token(lexer);
+        char *cast_type = parse_type(lexer);
 
         if (lexer->current_token.type != TOKEN_PIPE)
         {
@@ -295,6 +288,7 @@ Node *parse_binary_expression(Lexer *lexer)
 {
     return parse_binary_expression_with_precedence(lexer, 0);
 }
+
 Node *parse_if_statement(Lexer *lexer)
 {
     scan_token(lexer);
@@ -404,6 +398,27 @@ Node *parse_while_statement(Lexer *lexer)
     return make_while_statement(condition, body);
 }
 
+char *parse_type(Lexer *lexer)
+{
+    if (!is_type_token(lexer->current_token.type))
+    {
+        error_report(lexer->line, "Error: Expected type.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    char *type_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+    scan_token(lexer);
+
+    while (lexer->current_token.type == TOKEN_STAR)
+    {
+        type_name = realloc(type_name, strlen(type_name) + 2);
+        strcat(type_name, "*");
+        scan_token(lexer);
+    }
+
+    return type_name;
+}
+
 Node *parse_statement(Lexer *lexer)
 {
     if (lexer->current_token.type == TOKEN_IF)
@@ -439,8 +454,7 @@ Node *parse_statement(Lexer *lexer)
 
         return make_dereference_assignment(dereferenced_expr, value_expr);
     }
-
-    if (lexer->current_token.type == TOKEN_AT)
+    else if (lexer->current_token.type == TOKEN_AT)
     {
         scan_token(lexer);
 
@@ -466,14 +480,7 @@ Node *parse_statement(Lexer *lexer)
 
         while (lexer->current_token.type != TOKEN_RPAREN)
         {
-            if (!is_type_token(lexer->current_token.type) && lexer->current_token.type != TOKEN_IDENTIFIER)
-            {
-                error_report(lexer->line, "Error: Expected type in parameter list.\n");
-                exit(EXIT_FAILURE);
-            }
-
-            char *param_type = strndup(lexer->current_token.lexeme, lexer->current_token.length);
-            scan_token(lexer);
+            char *param_type = parse_type(lexer);
 
             if (lexer->current_token.type != TOKEN_COLON)
             {
@@ -515,14 +522,7 @@ Node *parse_statement(Lexer *lexer)
         {
             scan_token(lexer);
 
-            if (!is_type_token(lexer->current_token.type) && lexer->current_token.type != TOKEN_IDENTIFIER)
-            {
-                error_report(lexer->line, "Error: Expected return type after '->'.\n");
-                exit(EXIT_FAILURE);
-            }
-
-            return_type = strndup(lexer->current_token.lexeme, lexer->current_token.length);
-            scan_token(lexer);
+            return_type = parse_type(lexer);
         }
 
         if (lexer->current_token.type != TOKEN_LBRACE)
@@ -545,51 +545,51 @@ Node *parse_statement(Lexer *lexer)
 
         return make_function_decl(func_name, parameters, param_count, return_type, body);
     }
-    else if (is_type_token(lexer->current_token.type) || lexer->current_token.type == TOKEN_IDENTIFIER)
+    else if (is_type_token(lexer->current_token.type))
     {
-        char *var_type = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+        char *type_name = parse_type(lexer);
+
+        if (lexer->current_token.type != TOKEN_COLON)
+        {
+            error_report(lexer->line, "Error: Expected ':' after type in variable declaration.\n");
+            exit(EXIT_FAILURE);
+        }
         scan_token(lexer);
 
-        if (lexer->current_token.type == TOKEN_COLON)
+        if (lexer->current_token.type != TOKEN_IDENTIFIER)
         {
-            scan_token(lexer);
-
-            if (lexer->current_token.type != TOKEN_IDENTIFIER)
-            {
-                error_report(lexer->line, "Error: Expected variable name after ':'.\n");
-                exit(EXIT_FAILURE);
-            }
-
-            char *var_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
-            scan_token(lexer);
-
-            if (lexer->current_token.type != TOKEN_EQUAL)
-            {
-                error_report(lexer->line, "Error: Expected '=' after variable name.\n");
-                exit(EXIT_FAILURE);
-            }
-
-            scan_token(lexer);
-            Node *expr = parse_binary_expression(lexer);
-
-            if (lexer->current_token.type != TOKEN_SEMI)
-            {
-                error_report(lexer->line, "Error: Expected ';' after variable declaration.\n");
-                exit(EXIT_FAILURE);
-            }
-
-            scan_token(lexer);
-            return make_variable_decl(var_type, var_name, expr);
+            error_report(lexer->line, "Error: Expected variable name after ':'.\n");
+            exit(EXIT_FAILURE);
         }
-        else
-        {
-            char *var_name = var_type;
-            if (lexer->current_token.type != TOKEN_EQUAL)
-            {
-                error_report(lexer->line, "Error: Expected '=' for assignment.\n");
-                exit(EXIT_FAILURE);
-            }
 
+        char *var_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+        scan_token(lexer);
+
+        if (lexer->current_token.type != TOKEN_EQUAL)
+        {
+            error_report(lexer->line, "Error: Expected '=' after variable name.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+        Node *expr = parse_binary_expression(lexer);
+
+        if (lexer->current_token.type != TOKEN_SEMI)
+        {
+            error_report(lexer->line, "Error: Expected ';' after variable declaration.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+        return make_variable_decl(type_name, var_name, expr);
+    }
+    else if (lexer->current_token.type == TOKEN_IDENTIFIER)
+    {
+        char *identifier = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+        scan_token(lexer);
+
+        if (lexer->current_token.type == TOKEN_EQUAL)
+        {
             scan_token(lexer);
             Node *expr = parse_binary_expression(lexer);
 
@@ -600,10 +600,57 @@ Node *parse_statement(Lexer *lexer)
             }
 
             scan_token(lexer);
-            return make_assignment(var_name, expr);
+            return make_assignment(identifier, expr);
+        }
+        else if (lexer->current_token.type == TOKEN_LPAREN)
+        {
+            scan_token(lexer);
+
+            Node **arguments = NULL;
+            int arg_count = 0;
+
+            if (lexer->current_token.type != TOKEN_RPAREN)
+            {
+                do
+                {
+                    Node *arg = parse_binary_expression(lexer);
+                    arguments = realloc(arguments, sizeof(Node *) * (arg_count + 1));
+                    arguments[arg_count++] = arg;
+
+                    if (lexer->current_token.type == TOKEN_COMMA)
+                    {
+                        scan_token(lexer);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                } while (lexer->current_token.type != TOKEN_RPAREN);
+
+                if (lexer->current_token.type != TOKEN_RPAREN)
+                {
+                    error_report(lexer->line, "Error: Expected ')' after function arguments.\n");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            scan_token(lexer);
+
+            if (lexer->current_token.type != TOKEN_SEMI)
+            {
+                error_report(lexer->line, "Error: Expected ';' after function call.\n");
+                exit(EXIT_FAILURE);
+            }
+
+            scan_token(lexer);
+            return make_function_call(identifier, arguments, arg_count);
+        }
+        else
+        {
+            error_report(lexer->line, "Error: Unexpected token after identifier '%s'.\n", identifier);
+            exit(EXIT_FAILURE);
         }
     }
-
     else if (lexer->current_token.type == TOKEN_RETURN)
     {
         scan_token(lexer);

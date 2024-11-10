@@ -9,13 +9,28 @@
 
 LLVMTypeRef get_llvm_type(const char *type_name)
 {
-    if (strstr(type_name, "*") != NULL)
+    if (strchr(type_name, '*') != NULL)
     {
+        int ptr_count = 0;
+        for (int i = 0; type_name[i]; ++i)
+        {
+            if (type_name[i] == '*')
+                ptr_count++;
+        }
+
         char *base_type_name = strdup(type_name);
-        base_type_name[strlen(base_type_name) - 1] = '\0';
+        base_type_name[strcspn(base_type_name, "*")] = '\0';
+
         LLVMTypeRef base_type = get_llvm_type(base_type_name);
         free(base_type_name);
-        return LLVMPointerType(base_type, 0);
+
+        LLVMTypeRef ptr_type = base_type;
+        for (int i = 0; i < ptr_count; ++i)
+        {
+            ptr_type = LLVMPointerType(ptr_type, 0);
+        }
+
+        return ptr_type;
     }
     else if (strcmp(type_name, "i8") == 0)
         return LLVMInt8Type();

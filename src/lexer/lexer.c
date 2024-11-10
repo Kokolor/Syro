@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <error.h>
 #include "lexer.h"
+#include "error.h"
 
 void init_lexer(Lexer *lexer, char *source)
 {
@@ -121,7 +121,7 @@ Token scan_token(Lexer *lexer)
 
     if (isalpha(c) || c == '_')
     {
-        while (isalnum(peek(lexer)) || peek(lexer) == '_' || peek(lexer) == '*')
+        while (isalnum(peek(lexer)) || peek(lexer) == '_')
             advance(lexer);
 
         int length = (int)(lexer->current_position - lexer->start);
@@ -227,7 +227,7 @@ Token scan_token(Lexer *lexer)
         lexer->current_token = make_token(lexer, TOKEN_PIPE);
         break;
     default:
-        error_report(lexer->line, "Unexpected character '!'");
+        error_report(lexer->line, "Unexpected character '%c'", c);
         exit(EXIT_FAILURE);
     }
 

@@ -1,4 +1,4 @@
-
+// ast.h
 
 #ifndef AST_H
 #define AST_H
@@ -75,6 +75,8 @@ Node *make_if_statement(Node *condition, Node *then_branch, Node *else_branch);
 Node *make_while_statement(Node *condition, Node *body);
 Node *make_address_of(Node *expression);
 Node *make_dereference(Node *expression);
+
+char *parse_type(Lexer *lexer);
 Node *parse_if_statement(Lexer *lexer);
 Node *parse_while_statement(Lexer *lexer);
 Node *parse_statement(Lexer *lexer);
@@ -89,4 +91,4 @@ int get_operator_precedence(NodeType type);
 int is_operator(TokenType token);
 void free_ast(Node *node);
 
-#endif
+#endif // AST_H
