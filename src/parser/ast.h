@@ -36,6 +36,13 @@ typedef enum
     AST_ADDRESS_OF,
     AST_DEREFERENCE,
     AST_DEREFERENCE_ASSIGNMENT,
+
+    AST_ARRAY_TYPE,
+    AST_ARRAY_DECL,
+    AST_ARRAY_ACCESS,
+    AST_ARRAY_ASSIGNMENT,
+
+    AST_NEGATE,
 } NodeType;
 
 typedef struct Node Node;
@@ -66,6 +73,10 @@ Node *make_node(NodeType type, Node *left, Node *right, int number_value);
 Node *make_leaf(NodeType type, int number_value);
 Node *make_assignment(char *var_name, Node *expression);
 Node *make_dereference_assignment(Node *dereferenced_expr, Node *value_expr);
+Node *make_array_type(char *element_type, int size);
+Node *make_array_decl(char *var_name, Node *array_type, Node **elements, int element_count);
+Node *make_array_access(char *var_name, Node *index);
+Node *make_array_assignment(char *array_name, Node *index, Node *value);
 Node *make_function_decl(char *func_name, Node **parameters, int param_count, char *return_type, Node *body);
 Node *make_variable_decl(char *var_type, char *var_name, Node *expression);
 Node *make_return_stmt(Node *expression);

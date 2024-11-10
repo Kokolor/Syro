@@ -5,6 +5,7 @@
 #include <string.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/Analysis.h>
+#include <error.h>
 #include "codegen.h"
 
 LLVMTypeRef get_llvm_type(const char *type_name)
@@ -12,15 +13,14 @@ LLVMTypeRef get_llvm_type(const char *type_name)
     if (strchr(type_name, '*') != NULL)
     {
         int ptr_count = 0;
-        for (int i = 0; type_name[i]; ++i)
+        const char *ptr = type_name;
+        while (*ptr == '*')
         {
-            if (type_name[i] == '*')
-                ptr_count++;
+            ptr_count++;
+            ptr++;
         }
 
-        char *base_type_name = strdup(type_name);
-        base_type_name[strcspn(base_type_name, "*")] = '\0';
-
+        char *base_type_name = strndup(type_name, strlen(type_name) - ptr_count);
         LLVMTypeRef base_type = get_llvm_type(base_type_name);
         free(base_type_name);
 
@@ -31,6 +31,38 @@ LLVMTypeRef get_llvm_type(const char *type_name)
         }
 
         return ptr_type;
+    }
+    else if (strchr(type_name, '[') != NULL)
+    {
+        char *element_type_str = strdup(type_name);
+        if (!element_type_str)
+        {
+            error_report(-1, "Memory allocation failed in get_llvm_type.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        char *bracket_pos = strchr(element_type_str, '[');
+        *bracket_pos = '\0';
+        char *size_str = bracket_pos + 1;
+        char *end_bracket = strchr(size_str, ']');
+        if (!end_bracket)
+        {
+            error_report(-1, "Invalid array type '%s'.\n", type_name);
+            free(element_type_str);
+            exit(EXIT_FAILURE);
+        }
+        *end_bracket = '\0';
+
+        int size = atoi(size_str);
+        if (size <= 0)
+        {
+            error_report(-1, "Invalid array size in type '%s'.\n", type_name);
+            free(element_type_str);
+            exit(EXIT_FAILURE);
+        }
+        LLVMTypeRef element_type = get_llvm_type(element_type_str);
+        free(element_type_str);
+        return LLVMArrayType(element_type, size);
     }
     else if (strcmp(type_name, "i8") == 0)
         return LLVMInt8Type();
@@ -44,7 +76,7 @@ LLVMTypeRef get_llvm_type(const char *type_name)
         return LLVMVoidType();
     else
     {
-        fprintf(stderr, "Error: Unsupported type '%s'.\n", type_name);
+        error_report(-1, "Unsupported type '%s'.\n", type_name);
         exit(EXIT_FAILURE);
     }
 }
@@ -63,7 +95,7 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
     {
         if (!builder)
         {
-            fprintf(stderr, "Error: Builder is NULL in assignment.\n");
+            error_report(-1, "Builder is NULL in assignment.\n");
             exit(EXIT_FAILURE);
         }
 
@@ -71,7 +103,7 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
         LLVMValueRef var = get_symbol(sym_table, var_name);
         if (!var)
         {
-            fprintf(stderr, "Error: Undefined variable '%s' in assignment.\n", var_name);
+            error_report(-1, "Undefined variable '%s' in assignment.\n", var_name);
             exit(EXIT_FAILURE);
         }
 
@@ -126,6 +158,105 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
         return loaded;
     }
+    case AST_ARRAY_TYPE:
+    {
+        LLVMTypeRef element_type = get_llvm_type(node->var_type);
+        LLVMTypeRef array_type = LLVMArrayType(element_type, node->number_value);
+        return array_type;
+    }
+    case AST_ARRAY_DECL:
+    {
+        LLVMTypeRef element_type = get_llvm_type(node->var_type);
+        LLVMTypeRef array_type = LLVMArrayType(element_type, node->number_value);
+        LLVMValueRef alloca = LLVMBuildAlloca(builder, array_type, node->var_name);
+        add_symbol(sym_table, node->var_name, alloca);
+        for (int i = 0; i < node->param_count; ++i)
+        {
+            LLVMValueRef index = LLVMConstInt(LLVMInt32Type(), i, 0);
+            LLVMValueRef indices[] = {LLVMConstInt(LLVMInt32Type(), 0, 0), index};
+            LLVMValueRef element_ptr = LLVMBuildGEP2(builder, array_type, alloca, indices, 2, "arrayelem");
+            LLVMValueRef element_value = generate_code(node->parameters[i], module, printf_func, format_str, sym_table, builder);
+            LLVMBuildStore(builder, element_value, element_ptr);
+        }
+        return alloca;
+    }
+    case AST_ARRAY_ASSIGNMENT:
+    {
+        LLVMValueRef array_ptr = get_symbol(sym_table, node->var_name);
+        if (!array_ptr)
+        {
+            error_report(-1, "Undefined array '%s'.\n", node->var_name);
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMValueRef index = generate_code(node->left, module, printf_func, format_str, sym_table, builder);
+        LLVMValueRef value = generate_code(node->right, module, printf_func, format_str, sym_table, builder);
+
+        LLVMTypeRef array_ptr_type = LLVMTypeOf(array_ptr);
+        LLVMTypeRef array_type = LLVMGetElementType(array_ptr_type);
+        LLVMTypeRef element_type = LLVMGetElementType(array_type);
+
+        LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, 0);
+        LLVMValueRef indices[] = {zero, index};
+
+        LLVMValueRef element_ptr = LLVMBuildGEP2(builder, array_type, array_ptr, indices, 2, "arrayelem");
+
+        LLVMBuildStore(builder, value, element_ptr);
+        return value;
+    }
+    case AST_ARRAY_ACCESS:
+    {
+        LLVMValueRef array_ptr = get_symbol(sym_table, node->var_name);
+        if (!array_ptr)
+        {
+            fprintf(stderr, "Error: Undefined array '%s'.\n", node->var_name);
+            exit(EXIT_FAILURE);
+        }
+        LLVMValueRef index = generate_code(node->expression, module, printf_func, format_str, sym_table, builder);
+
+        LLVMTypeRef array_ptr_type = LLVMTypeOf(array_ptr);
+
+        LLVMTypeRef array_type = LLVMGetElementType(array_ptr_type);
+
+        LLVMTypeRef element_type = LLVMGetElementType(array_type);
+
+        LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, 0);
+        LLVMValueRef indices[] = {zero, index};
+
+        LLVMValueRef element_ptr = LLVMBuildGEP2(builder, array_type, array_ptr, indices, 2, "arrayelem");
+
+        LLVMValueRef loaded = LLVMBuildLoad2(builder, element_type, element_ptr, "loadelem");
+        return loaded;
+    }
+
+    case AST_NEGATE:
+    {
+        if (!builder)
+        {
+            fprintf(stderr, "Error: Builder is NULL in negate operation.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMValueRef expr = generate_code(node->left, module, printf_func, format_str, sym_table, builder);
+        if (!expr)
+        {
+            fprintf(stderr, "Error: Failed to generate expression for negate.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMTypeRef expr_type = LLVMTypeOf(expr);
+
+        if (LLVMGetTypeKind(expr_type) == LLVMIntegerTypeKind)
+        {
+            return LLVMBuildNeg(builder, expr, "negtmp");
+        }
+        else
+        {
+            fprintf(stderr, "Error: Unsupported type in negate operation.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+
     case AST_FUNCTION_DECL:
     {
         LLVMTypeRef return_type = LLVMVoidType();

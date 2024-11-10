@@ -11,7 +11,7 @@ Node *make_node(NodeType type, Node *left, Node *right, int number_value)
     Node *node = (Node *)malloc(sizeof(Node));
     if (node == NULL)
     {
-        fprintf(stderr, "Error: Memory allocation failed.\n");
+        error_report(-1, "Memory allocation failed in make_node.\n");
         exit(EXIT_FAILURE);
     }
     node->type = type;
@@ -30,6 +30,9 @@ Node *make_node(NodeType type, Node *left, Node *right, int number_value)
     node->condition = NULL;
     node->then_branch = NULL;
     node->else_branch = NULL;
+    node->init = NULL;
+    node->increment = NULL;
+
     return node;
 }
 
@@ -49,6 +52,42 @@ Node *make_assignment(char *var_name, Node *expression)
 Node *make_dereference_assignment(Node *dereferenced_expr, Node *value_expr)
 {
     Node *node = make_node(AST_DEREFERENCE_ASSIGNMENT, dereferenced_expr, value_expr, 0);
+    return node;
+}
+
+Node *make_array_type(char *element_type, int size)
+{
+    Node *node = make_node(AST_ARRAY_TYPE, NULL, NULL, 0);
+    node->var_type = element_type;
+    node->number_value = size;
+    return node;
+}
+
+Node *make_array_decl(char *var_name, Node *array_type, Node **elements, int element_count)
+{
+    Node *node = make_node(AST_ARRAY_DECL, NULL, NULL, 0);
+    node->var_name = var_name;
+    node->var_type = array_type->var_type;
+    node->number_value = array_type->number_value;
+    node->parameters = elements;
+    node->param_count = element_count;
+    return node;
+}
+
+Node *make_array_access(char *var_name, Node *index)
+{
+    Node *node = make_node(AST_ARRAY_ACCESS, NULL, NULL, 0);
+    node->var_name = var_name;
+    node->expression = index;
+    return node;
+}
+
+Node *make_array_assignment(char *array_name, Node *index, Node *value)
+{
+    Node *node = make_node(AST_ARRAY_ASSIGNMENT, NULL, NULL, 0);
+    node->var_name = array_name;
+    node->left = index;
+    node->right = value;
     return node;
 }
 
@@ -163,97 +202,6 @@ Node *make_dereference(Node *expression)
     return node;
 }
 
-Node *parse_primary(Lexer *lexer)
-{
-    Token token = lexer->current_token;
-
-    if (token.type == TOKEN_NUMBER)
-    {
-        scan_token(lexer);
-        return make_leaf(AST_NUMBER, atoi(token.lexeme));
-    }
-    else if (token.type == TOKEN_IDENTIFIER)
-    {
-        char *identifier = strndup(token.lexeme, token.length);
-        scan_token(lexer);
-
-        if (lexer->current_token.type == TOKEN_LPAREN)
-        {
-            scan_token(lexer);
-
-            Node **arguments = NULL;
-            int arg_count = 0;
-
-            if (lexer->current_token.type != TOKEN_RPAREN)
-            {
-                do
-                {
-                    Node *arg = parse_binary_expression(lexer);
-                    arguments = realloc(arguments, sizeof(Node *) * (arg_count + 1));
-                    arguments[arg_count++] = arg;
-
-                    if (lexer->current_token.type == TOKEN_COMMA)
-                    {
-                        scan_token(lexer);
-                    }
-                    else
-                    {
-                        break;
-                    }
-                } while (lexer->current_token.type != TOKEN_RPAREN);
-
-                if (lexer->current_token.type != TOKEN_RPAREN)
-                {
-                    error_report(lexer->line, "Error: Expected ')' after function arguments.\n");
-                    exit(EXIT_FAILURE);
-                }
-            }
-
-            scan_token(lexer);
-
-            return make_function_call(identifier, arguments, arg_count);
-        }
-        else
-        {
-            return make_variable_ref(identifier);
-        }
-    }
-    else if (token.type == TOKEN_LPAREN)
-    {
-        scan_token(lexer);
-        Node *node = parse_binary_expression(lexer);
-        if (lexer->current_token.type != TOKEN_RPAREN)
-        {
-            error_report(lexer->line, "Error: Expected ')'.\n");
-            exit(EXIT_FAILURE);
-        }
-        scan_token(lexer);
-        return node;
-    }
-    else if (token.type == TOKEN_PIPE)
-    {
-        scan_token(lexer);
-
-        char *cast_type = parse_type(lexer);
-
-        if (lexer->current_token.type != TOKEN_PIPE)
-        {
-            error_report(lexer->line, "Error: Expected '|' after type in cast.\n");
-            exit(EXIT_FAILURE);
-        }
-
-        scan_token(lexer);
-
-        Node *expr = parse_primary(lexer);
-        return make_cast(cast_type, expr);
-    }
-    else
-    {
-        error_report(lexer->line, "Error: Unexpected token '%.*s'.\n", token.length, token.lexeme);
-        exit(EXIT_FAILURE);
-    }
-}
-
 Node *parse_expression_statement(Lexer *lexer)
 {
     if (lexer->current_token.type == TOKEN_IDENTIFIER)
@@ -266,6 +214,30 @@ Node *parse_expression_statement(Lexer *lexer)
             scan_token(lexer);
             Node *expr = parse_binary_expression(lexer);
             return make_assignment(identifier, expr);
+        }
+        else if (lexer->current_token.type == TOKEN_LBRACKET)
+        {
+
+            scan_token(lexer);
+            Node *index = parse_binary_expression(lexer);
+            if (lexer->current_token.type != TOKEN_RBRACKET)
+            {
+                error_report(lexer->line, "Error: Expected ']' after array index.\n");
+                exit(EXIT_FAILURE);
+            }
+            scan_token(lexer);
+
+            if (lexer->current_token.type == TOKEN_EQUAL)
+            {
+                scan_token(lexer);
+                Node *expr = parse_binary_expression(lexer);
+                return make_array_assignment(identifier, index, expr);
+            }
+            else
+            {
+                error_report(lexer->line, "Error: Expected '=' after array access.\n");
+                exit(EXIT_FAILURE);
+            }
         }
         else
         {
@@ -322,6 +294,49 @@ Node *parse_binary_expression_with_precedence(Lexer *lexer, int precedence)
 Node *parse_binary_expression(Lexer *lexer)
 {
     return parse_binary_expression_with_precedence(lexer, 0);
+}
+
+char *parse_type(Lexer *lexer)
+{
+    if (!is_type_token(lexer->current_token.type))
+    {
+        error_report(lexer->line, "Error: Expected type.\n");
+        exit(EXIT_FAILURE);
+    }
+    char *type_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+    scan_token(lexer);
+    while (lexer->current_token.type == TOKEN_STAR)
+    {
+        type_name = realloc(type_name, strlen(type_name) + 2);
+        strcat(type_name, "*");
+        scan_token(lexer);
+    }
+    if (lexer->current_token.type == TOKEN_LBRACKET)
+    {
+        scan_token(lexer);
+        int size = -1;
+        if (lexer->current_token.type == TOKEN_NUMBER)
+        {
+            size = atoi(lexer->current_token.lexeme);
+            scan_token(lexer);
+        }
+        else
+        {
+            error_report(lexer->line, "Error: Expected array size.\n");
+            exit(EXIT_FAILURE);
+        }
+        if (lexer->current_token.type != TOKEN_RBRACKET)
+        {
+            error_report(lexer->line, "Error: Expected ']' after array size.\n");
+            exit(EXIT_FAILURE);
+        }
+        scan_token(lexer);
+        char size_str[32];
+        sprintf(size_str, "[%d]", size);
+        type_name = realloc(type_name, strlen(type_name) + strlen(size_str) + 1);
+        strcat(type_name, size_str);
+    }
+    return type_name;
 }
 
 Node *parse_if_statement(Lexer *lexer)
@@ -499,25 +514,117 @@ Node *parse_for_statement(Lexer *lexer)
     return make_for_statement(init, condition, increment, body);
 }
 
-char *parse_type(Lexer *lexer)
+Node *parse_primary(Lexer *lexer)
 {
-    if (!is_type_token(lexer->current_token.type))
+    Token token = lexer->current_token;
+
+    if (token.type == TOKEN_NUMBER)
     {
-        error_report(lexer->line, "Error: Expected type.\n");
+        scan_token(lexer);
+        return make_leaf(AST_NUMBER, atoi(token.lexeme));
+    }
+    else if (token.type == TOKEN_IDENTIFIER)
+    {
+        char *identifier = strndup(token.lexeme, token.length);
+        scan_token(lexer);
+
+        if (lexer->current_token.type == TOKEN_LPAREN)
+        {
+            scan_token(lexer);
+
+            Node **arguments = NULL;
+            int arg_count = 0;
+
+            if (lexer->current_token.type != TOKEN_RPAREN)
+            {
+                do
+                {
+                    Node *arg = parse_binary_expression(lexer);
+                    arguments = realloc(arguments, sizeof(Node *) * (arg_count + 1));
+                    arguments[arg_count++] = arg;
+
+                    if (lexer->current_token.type == TOKEN_COMMA)
+                    {
+                        scan_token(lexer);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                } while (lexer->current_token.type != TOKEN_RPAREN);
+
+                if (lexer->current_token.type != TOKEN_RPAREN)
+                {
+                    error_report(lexer->line, "Error: Expected ')' after function arguments.\n");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            scan_token(lexer);
+
+            return make_function_call(identifier, arguments, arg_count);
+        }
+        else if (lexer->current_token.type == TOKEN_LBRACKET)
+        {
+            scan_token(lexer);
+
+            Node *index = parse_binary_expression(lexer);
+
+            if (lexer->current_token.type != TOKEN_RBRACKET)
+            {
+                error_report(lexer->line, "Error: Expected ']' after array index.\n");
+                exit(EXIT_FAILURE);
+            }
+
+            scan_token(lexer);
+
+            return make_array_access(identifier, index);
+        }
+        else
+        {
+            return make_variable_ref(identifier);
+        }
+    }
+    else if (token.type == TOKEN_LPAREN)
+    {
+        scan_token(lexer);
+        Node *node = parse_binary_expression(lexer);
+        if (lexer->current_token.type != TOKEN_RPAREN)
+        {
+            error_report(lexer->line, "Error: Expected ')'.\n");
+            exit(EXIT_FAILURE);
+        }
+        scan_token(lexer);
+        return node;
+    }
+    else if (token.type == TOKEN_PIPE)
+    {
+        scan_token(lexer);
+
+        char *cast_type = parse_type(lexer);
+
+        if (lexer->current_token.type != TOKEN_PIPE)
+        {
+            error_report(lexer->line, "Error: Expected '|' after type in cast.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        scan_token(lexer);
+
+        Node *expr = parse_primary(lexer);
+        return make_cast(cast_type, expr);
+    }
+    else if (token.type == TOKEN_MINUS)
+    {
+        scan_token(lexer);
+        Node *expr = parse_primary(lexer);
+        return make_node(AST_NEGATE, expr, NULL, 0);
+    }
+    else
+    {
+        error_report(lexer->line, "Error: Unexpected token '%.*s'.\n", token.length, token.lexeme);
         exit(EXIT_FAILURE);
     }
-
-    char *type_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
-    scan_token(lexer);
-
-    while (lexer->current_token.type == TOKEN_STAR)
-    {
-        type_name = realloc(type_name, strlen(type_name) + 2);
-        strcat(type_name, "*");
-        scan_token(lexer);
-    }
-
-    return type_name;
 }
 
 Node *parse_statement(Lexer *lexer)
@@ -653,54 +760,75 @@ Node *parse_statement(Lexer *lexer)
     else if (is_type_token(lexer->current_token.type))
     {
         char *type_name = parse_type(lexer);
-
         if (lexer->current_token.type != TOKEN_COLON)
         {
             error_report(lexer->line, "Error: Expected ':' after type in variable declaration.\n");
             exit(EXIT_FAILURE);
         }
         scan_token(lexer);
-
         if (lexer->current_token.type != TOKEN_IDENTIFIER)
         {
             error_report(lexer->line, "Error: Expected variable name after ':'.\n");
             exit(EXIT_FAILURE);
         }
-
         char *var_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
         scan_token(lexer);
-
         Node *expr = NULL;
-
         if (lexer->current_token.type == TOKEN_EQUAL)
         {
             scan_token(lexer);
-
-            if (lexer->current_token.type == TOKEN_UNDEFINED)
+            if (lexer->current_token.type == TOKEN_LBRACE)
             {
-
                 scan_token(lexer);
-                expr = NULL;
+                Node **elements = NULL;
+                int element_count = 0;
+                while (lexer->current_token.type != TOKEN_RBRACE)
+                {
+                    Node *element = parse_binary_expression(lexer);
+                    elements = realloc(elements, sizeof(Node *) * (element_count + 1));
+                    elements[element_count++] = element;
+                    if (lexer->current_token.type == TOKEN_COMMA)
+                    {
+                        scan_token(lexer);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                if (lexer->current_token.type != TOKEN_RBRACE)
+                {
+                    error_report(lexer->line, "Error: Expected '}' after array elements.\n");
+                    exit(EXIT_FAILURE);
+                }
+                scan_token(lexer);
+                Node *array_type_node = make_array_type(type_name, element_count);
+                return make_array_decl(var_name, array_type_node, elements, element_count);
             }
             else
             {
                 expr = parse_binary_expression(lexer);
             }
         }
-        else
-        {
-
-            expr = NULL;
-        }
-
         if (lexer->current_token.type != TOKEN_SEMI)
         {
             error_report(lexer->line, "Error: Expected ';' after variable declaration.\n");
             exit(EXIT_FAILURE);
         }
-
         scan_token(lexer);
-        return make_variable_decl(type_name, var_name, expr);
+        if (strchr(type_name, '[') != NULL)
+        {
+
+            char *bracket_pos = strchr(type_name, '[');
+            int size = atoi(bracket_pos + 1);
+            *bracket_pos = '\0';
+            Node *array_type_node = make_array_type(type_name, size);
+            return make_array_decl(var_name, array_type_node, NULL, 0);
+        }
+        else
+        {
+            return make_variable_decl(type_name, var_name, expr);
+        }
     }
     else if (lexer->current_token.type == TOKEN_IDENTIFIER)
     {
@@ -720,6 +848,38 @@ Node *parse_statement(Lexer *lexer)
 
             scan_token(lexer);
             return make_assignment(identifier, expr);
+        }
+        else if (lexer->current_token.type == TOKEN_LBRACKET)
+        {
+
+            scan_token(lexer);
+            Node *index = parse_binary_expression(lexer);
+            if (lexer->current_token.type != TOKEN_RBRACKET)
+            {
+                error_report(lexer->line, "Error: Expected ']' after array index.\n");
+                exit(EXIT_FAILURE);
+            }
+            scan_token(lexer);
+
+            if (lexer->current_token.type == TOKEN_EQUAL)
+            {
+                scan_token(lexer);
+                Node *expr = parse_binary_expression(lexer);
+
+                if (lexer->current_token.type != TOKEN_SEMI)
+                {
+                    error_report(lexer->line, "Error: Expected ';' after assignment.\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                scan_token(lexer);
+                return make_array_assignment(identifier, index, expr);
+            }
+            else
+            {
+                error_report(lexer->line, "Error: Expected '=' after array access.\n");
+                exit(EXIT_FAILURE);
+            }
         }
         else if (lexer->current_token.type == TOKEN_LPAREN)
         {
@@ -905,6 +1065,20 @@ void free_ast(Node *node)
         free(node->var_type);
         free(node->var_name);
         free_ast(node->expression);
+        break;
+    case AST_ARRAY_DECL:
+        free(node->var_type);
+        free(node->var_name);
+        for (int i = 0; i < node->param_count; ++i)
+        {
+            free_ast(node->parameters[i]);
+        }
+        free(node->parameters);
+        break;
+    case AST_ARRAY_ASSIGNMENT:
+        free(node->var_name);
+        free_ast(node->left);
+        free_ast(node->right);
         break;
     case AST_IF_STATEMENT:
         free_ast(node->condition);

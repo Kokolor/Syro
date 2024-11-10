@@ -4,13 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include "symbol_table.h"
+#include "error.h"
 
 SymbolTable *create_symbol_table()
 {
     SymbolTable *table = (SymbolTable *)malloc(sizeof(SymbolTable));
     if (!table)
     {
-        fprintf(stderr, "[symbol_table.c][create_symbol_table]: Memory allocation failed.\n");
+        error_report(-1, "Memory allocation failed in create_symbol_table.\n");
         exit(EXIT_FAILURE);
     }
     table->head = NULL;
@@ -19,10 +20,16 @@ SymbolTable *create_symbol_table()
 
 void add_symbol(SymbolTable *table, char *name, LLVMValueRef value)
 {
+    if (get_symbol(table, name))
+    {
+        error_report(-1, "Symbol '%s' already defined.\n", name);
+        exit(EXIT_FAILURE);
+    }
+
     Symbol *symbol = (Symbol *)malloc(sizeof(Symbol));
     if (!symbol)
     {
-        fprintf(stderr, "[symbol_table.c][add_symbol]: Memory allocation failed.\n");
+        error_report(-1, "Memory allocation failed in add_symbol.\n");
         exit(EXIT_FAILURE);
     }
     symbol->name = strdup(name);

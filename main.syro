@@ -1,33 +1,14 @@
-@add(i32: x, i32: y) -> i32 {
-    i32: sum = x + y;
-    return sum;
-}
-
 @main() -> void {
-    i32: a = 10;
-    i32: b = 20;
-    i32*: ptrA = &a;
-    i32*: ptrB = &b;
-
-    print(a);      
-    print(b);      
-
-    print(ptrA);   
-    print(ptrB);   
-
-    if (a < b) {
-        print(a);  
-    } else {
-        print(b);  
-    }
-
+    i32[5]: numbers;
     i32: i;
+
     for (i = 0; i < 5; i = i + 1) {
-        print(i);  
+        numbers[i] = i * 10;
     }
 
-    i32: result = add(a, b);
-    print(result); 
+    for (i = 0; i < 5; i = i + 1) {
+        print(numbers[i]);
+    }
 
     return;
 }

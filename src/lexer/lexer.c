@@ -215,6 +215,12 @@ Token scan_token(Lexer *lexer)
     case '}':
         lexer->current_token = make_token(lexer, TOKEN_RBRACE);
         break;
+    case '[':
+        lexer->current_token = make_token(lexer, TOKEN_LBRACKET);
+        break;
+    case ']':
+        lexer->current_token = make_token(lexer, TOKEN_RBRACKET);
+        break;
     case ',':
         lexer->current_token = make_token(lexer, TOKEN_COMMA);
         break;
