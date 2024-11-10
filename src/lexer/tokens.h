@@ -41,6 +41,8 @@ typedef enum
     TOKEN_IF,
     TOKEN_ELSE,
     TOKEN_WHILE,
+    TOKEN_FOR,
+    TOKEN_UNDEFINED,
 
     TOKEN_EOF
 } TokenType;

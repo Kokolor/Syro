@@ -1,30 +1,33 @@
-@swap(i32*: x, i32*: y) -> void {
-    i32: temp = *x;
-    *x = *y;
-    *y = temp;
+@add(i32: x, i32: y) -> i32 {
+    i32: sum = x + y;
+    return sum;
 }
 
-@increment(i32*: value) -> void {
-    *value = *value + 1;
-}
-
-@main() -> i32 {
+@main() -> void {
     i32: a = 10;
     i32: b = 20;
+    i32*: ptrA = &a;
+    i32*: ptrB = &b;
 
-    print a;
-    print b;
+    print(a);      
+    print(b);      
 
-    swap(&a, &b);
+    print(ptrA);   
+    print(ptrB);   
 
-    print a;
-    print b;
+    if (a < b) {
+        print(a);  
+    } else {
+        print(b);  
+    }
 
-    increment(&a);
-    increment(&b);
+    i32: i;
+    for (i = 0; i < 5; i = i + 1) {
+        print(i);  
+    }
 
-    print a;
-    print b;
+    i32: result = add(a, b);
+    print(result); 
 
-    return 0;
+    return;
 }

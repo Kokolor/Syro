@@ -353,14 +353,21 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
         add_symbol(sym_table, var_name, alloca);
 
-        LLVMValueRef expr = generate_code(node->expression, module, printf_func, format_str, sym_table, builder);
-        if (!expr)
+        if (node->expression)
         {
-            fprintf(stderr, "Error: Failed to generate expression for variable '%s'.\n", var_name);
-            exit(EXIT_FAILURE);
-        }
+            LLVMValueRef expr = generate_code(node->expression, module, printf_func, format_str, sym_table, builder);
+            if (!expr)
+            {
+                fprintf(stderr, "Error: Failed to generate expression for variable '%s'.\n", var_name);
+                exit(EXIT_FAILURE);
+            }
 
-        LLVMBuildStore(builder, expr, alloca);
+            LLVMBuildStore(builder, expr, alloca);
+        }
+        else
+        {
+            LLVMBuildStore(builder, LLVMConstNull(var_type), alloca);
+        }
 
         return alloca;
     }
@@ -582,6 +589,58 @@ LLVMValueRef generate_code(Node *node, LLVMModuleRef module, LLVMValueRef printf
 
         LLVMPositionBuilderAtEnd(builder, body_block);
         generate_code(node->body, module, printf_func, format_str, sym_table, builder);
+        LLVMBuildBr(builder, cond_block);
+
+        LLVMPositionBuilderAtEnd(builder, end_block);
+
+        break;
+    }
+    case AST_FOR_STATEMENT:
+    {
+        if (!builder)
+        {
+            fprintf(stderr, "Error: Builder is NULL in for statement.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        LLVMBasicBlockRef init_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "forinit");
+        LLVMBasicBlockRef cond_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "forcond");
+        LLVMBasicBlockRef body_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "forbody");
+        LLVMBasicBlockRef increment_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "forinc");
+        LLVMBasicBlockRef end_block = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder)), "forend");
+
+        LLVMBuildBr(builder, init_block);
+
+        LLVMPositionBuilderAtEnd(builder, init_block);
+        if (node->init)
+        {
+            generate_code(node->init, module, printf_func, format_str, sym_table, builder);
+        }
+        LLVMBuildBr(builder, cond_block);
+
+        LLVMPositionBuilderAtEnd(builder, cond_block);
+        LLVMValueRef condition = NULL;
+        if (node->condition)
+        {
+            condition = generate_code(node->condition, module, printf_func, format_str, sym_table, builder);
+        }
+        else
+        {
+            condition = LLVMConstInt(LLVMInt1Type(), 1, 0);
+        }
+        LLVMValueRef zero = LLVMConstInt(LLVMTypeOf(condition), 0, 0);
+        LLVMValueRef cond_value = LLVMBuildICmp(builder, LLVMIntNE, condition, zero, "forcond");
+        LLVMBuildCondBr(builder, cond_value, body_block, end_block);
+
+        LLVMPositionBuilderAtEnd(builder, body_block);
+        generate_code(node->body, module, printf_func, format_str, sym_table, builder);
+        LLVMBuildBr(builder, increment_block);
+
+        LLVMPositionBuilderAtEnd(builder, increment_block);
+        if (node->increment)
+        {
+            generate_code(node->increment, module, printf_func, format_str, sym_table, builder);
+        }
         LLVMBuildBr(builder, cond_block);
 
         LLVMPositionBuilderAtEnd(builder, end_block);

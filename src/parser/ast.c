@@ -139,6 +139,16 @@ Node *make_while_statement(Node *condition, Node *body)
     return node;
 }
 
+Node *make_for_statement(Node *init, Node *condition, Node *increment, Node *body)
+{
+    Node *node = make_node(AST_FOR_STATEMENT, NULL, NULL, 0);
+    node->init = init;
+    node->condition = condition;
+    node->increment = increment;
+    node->body = body;
+    return node;
+}
+
 Node *make_address_of(Node *expression)
 {
     Node *node = make_node(AST_ADDRESS_OF, NULL, NULL, 0);
@@ -241,6 +251,31 @@ Node *parse_primary(Lexer *lexer)
     {
         error_report(lexer->line, "Error: Unexpected token '%.*s'.\n", token.length, token.lexeme);
         exit(EXIT_FAILURE);
+    }
+}
+
+Node *parse_expression_statement(Lexer *lexer)
+{
+    if (lexer->current_token.type == TOKEN_IDENTIFIER)
+    {
+        char *identifier = strndup(lexer->current_token.lexeme, lexer->current_token.length);
+        scan_token(lexer);
+
+        if (lexer->current_token.type == TOKEN_EQUAL)
+        {
+            scan_token(lexer);
+            Node *expr = parse_binary_expression(lexer);
+            return make_assignment(identifier, expr);
+        }
+        else
+        {
+            error_report(lexer->line, "Error: Expected '=' after identifier '%s' in expression statement.\n", identifier);
+            exit(EXIT_FAILURE);
+        }
+    }
+    else
+    {
+        return parse_binary_expression(lexer);
     }
 }
 
@@ -398,6 +433,72 @@ Node *parse_while_statement(Lexer *lexer)
     return make_while_statement(condition, body);
 }
 
+Node *parse_for_statement(Lexer *lexer)
+{
+    scan_token(lexer);
+
+    if (lexer->current_token.type != TOKEN_LPAREN)
+    {
+        error_report(lexer->line, "Error: Expected '(' after 'for'.\n");
+        exit(EXIT_FAILURE);
+    }
+    scan_token(lexer);
+
+    Node *init = NULL;
+    if (lexer->current_token.type != TOKEN_SEMI)
+    {
+        init = parse_expression_statement(lexer);
+    }
+    if (lexer->current_token.type != TOKEN_SEMI)
+    {
+        error_report(lexer->line, "Error: Expected ';' after 'for' loop initialization.\n");
+        exit(EXIT_FAILURE);
+    }
+    scan_token(lexer);
+
+    Node *condition = NULL;
+    if (lexer->current_token.type != TOKEN_SEMI)
+    {
+        condition = parse_binary_expression(lexer);
+    }
+    if (lexer->current_token.type != TOKEN_SEMI)
+    {
+        error_report(lexer->line, "Error: Expected ';' after 'for' loop condition.\n");
+        exit(EXIT_FAILURE);
+    }
+    scan_token(lexer);
+
+    Node *increment = NULL;
+    if (lexer->current_token.type != TOKEN_RPAREN)
+    {
+        increment = parse_expression_statement(lexer);
+    }
+    if (lexer->current_token.type != TOKEN_RPAREN)
+    {
+        error_report(lexer->line, "Error: Expected ')' after 'for' loop increment.\n");
+        exit(EXIT_FAILURE);
+    }
+    scan_token(lexer);
+
+    if (lexer->current_token.type != TOKEN_LBRACE)
+    {
+        error_report(lexer->line, "Error: Expected '{' after 'for' loop header.\n");
+        exit(EXIT_FAILURE);
+    }
+    scan_token(lexer);
+
+    Node *body = parse_statement_list(lexer);
+
+    if (lexer->current_token.type != TOKEN_RBRACE)
+    {
+        error_report(lexer->line, "Error: Expected '}' after 'for' loop body.\n");
+        exit(EXIT_FAILURE);
+    }
+    scan_token(lexer);
+
+    return make_for_statement(init, condition, increment, body);
+}
+
 char *parse_type(Lexer *lexer)
 {
     if (!is_type_token(lexer->current_token.type))
@@ -428,6 +529,10 @@ Node *parse_statement(Lexer *lexer)
     else if (lexer->current_token.type == TOKEN_WHILE)
     {
         return parse_while_statement(lexer);
+    }
+    else if (lexer->current_token.type == TOKEN_FOR)
+    {
+        return parse_for_statement(lexer);
     }
     else if (lexer->current_token.type == TOKEN_STAR)
     {
@@ -565,14 +670,28 @@ Node *parse_statement(Lexer *lexer)
         char *var_name = strndup(lexer->current_token.lexeme, lexer->current_token.length);
         scan_token(lexer);
 
-        if (lexer->current_token.type != TOKEN_EQUAL)
-        {
-            error_report(lexer->line, "Error: Expected '=' after variable name.\n");
-            exit(EXIT_FAILURE);
-        }
+        Node *expr = NULL;
 
-        scan_token(lexer);
-        Node *expr = parse_binary_expression(lexer);
+        if (lexer->current_token.type == TOKEN_EQUAL)
+        {
+            scan_token(lexer);
+
+            if (lexer->current_token.type == TOKEN_UNDEFINED)
+            {
+
+                scan_token(lexer);
+                expr = NULL;
+            }
+            else
+            {
+                expr = parse_binary_expression(lexer);
+            }
+        }
+        else
+        {
+
+            expr = NULL;
+        }
 
         if (lexer->current_token.type != TOKEN_SEMI)
         {
@@ -791,6 +910,16 @@ void free_ast(Node *node)
         free_ast(node->condition);
         free_ast(node->then_branch);
         free_ast(node->else_branch);
+        break;
+    case AST_WHILE_STATEMENT:
+        free_ast(node->condition);
+        free_ast(node->body);
+        break;
+    case AST_FOR_STATEMENT:
+        free_ast(node->init);
+        free_ast(node->condition);
+        free_ast(node->increment);
+        free_ast(node->body);
         break;
     case AST_IDENTIFIER:
         free(node->var_name);

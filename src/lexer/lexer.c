@@ -37,6 +37,10 @@ TokenType check_keyword(char *start, int length)
         return TOKEN_ELSE;
     if (length == 5 && strncmp(start, "while", 5) == 0)
         return TOKEN_WHILE;
+    if (length == 3 && strncmp(start, "for", 3) == 0)
+        return TOKEN_FOR;
+    if (length == 9 && strncmp(start, "undefined", 9) == 0)
+        return TOKEN_UNDEFINED;
 
     return TOKEN_IDENTIFIER;
 }
